@@ -1,21 +1,33 @@
 import "server-only";
+import { workspaceTrace } from "@/lib/workspace-diagnostics";
 import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/db";
 import * as s from "@/db/schema";
-import { user, authorize } from "@/lib/auth";
+import { user } from "@/lib/auth";
 import { subscriptionSnapshot } from "@/lib/subscription-service";
 import {
   capabilitiesForRole,
+  roleHasCapability,
   type MerchantCapability,
 } from "@/lib/merchant-capabilities";
 export async function dashboardData(requiredCapability?: MerchantCapability) {
+  const trace = workspaceTrace("dashboard.load");
+  return trace.step("load", () => loadDashboardData(requiredCapability));
+}
+async function loadDashboardData(requiredCapability?: MerchantCapability) {
   const u = await user();
   const database = db();
   const membership = await database.query.memberships.findFirst({
     where: eq(s.memberships.userId, u.id),
   });
   if (!membership) return null;
-  await authorize(membership.merchantId, requiredCapability);
+  // The user and their membership were just validated above. Reuse that
+  // server-loaded role instead of repeating Auth and the same membership read.
+  if (
+    requiredCapability &&
+    !roleHasCapability(membership.role, requiredCapability)
+  )
+    throw new Error("Workspace permission required");
   const merchantId = membership.merchantId;
   const [
     business,

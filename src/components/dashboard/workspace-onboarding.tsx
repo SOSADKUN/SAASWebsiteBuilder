@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { LoaderCircle, ArrowRight } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { createWorkspace } from "@/server/actions";
@@ -9,20 +9,28 @@ export function WorkspaceOnboarding() {
   });
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!pending) return;
+    const timer = window.setTimeout(() => setSlow(true), 10000);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
   return (
     <main className="servqo-result-page workspace-onboarding">
       <Brand />
       <section className="servqo-result-card" aria-labelledby="workspace-title">
         <span className="servqo-kicker">MAKE YOURSELF AT HOME</span>
-        <h1 id="workspace-title">Let’s bring your business online.</h1>
-        <p>
-          Choose your business name and website address. We’ll create your
-          workspace and a private starter homepage.
-        </p>
+        <h1 id="workspace-title">Your business starts here.</h1>
+        <p>Choose a name and address. We’ll set up the rest.</p>
         <form action={action} className="servqo-auth-form" aria-busy={pending}>
           {state.error && (
             <p className="notice error" role="alert">
               {state.error}
+              {state.reference && (
+                <span className="workspace-reference">
+                  Support reference: {state.reference}
+                </span>
+              )}
             </p>
           )}
           <label htmlFor="business-name">
@@ -58,11 +66,16 @@ export function WorkspaceOnboarding() {
               spellCheck={false}
             />
             <small>
-              /sites/{slug || "your-cafe"} · Lowercase letters, numbers and
+              /sites/{slug || "your-cafe"} · Lowercase letters, numbers,
               hyphens.
             </small>
           </label>
-          <button type="submit" className="servqo-signin" disabled={pending}>
+          <button
+            type="submit"
+            className="servqo-signin"
+            disabled={pending}
+            onClick={() => setSlow(false)}
+          >
             {pending ? (
               <>
                 Creating your workspace…
@@ -77,8 +90,10 @@ export function WorkspaceOnboarding() {
           </button>
           <p className="workspace-progress" role="status" aria-live="polite">
             {pending
-              ? "Setting up your business, starter website and trial. Please keep this page open."
-              : "Your 14-day business trial starts when your workspace is created. Nothing is published yet."}
+              ? slow
+                ? "This is taking longer than usual. Keep this tab open; please don’t submit again."
+                : "Creating your business and starter website…"
+              : "14-day free trial. Your website stays private until you publish."}
           </p>
         </form>
       </section>

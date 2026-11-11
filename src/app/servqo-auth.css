@@ -1139,3 +1139,100 @@
     animation: none;
   }
 }
+/* Workspace setup is a compact single-screen form at standard phone sizes.
+   Keep natural scrolling for browser zoom, the keyboard and long error text. */
+.workspace-onboarding {
+  padding: 20px 16px;
+  gap: 18px;
+}
+.workspace-onboarding > .servqo-brand {
+  font-size: 21px;
+}
+.workspace-onboarding .servqo-result-card {
+  max-width: 430px;
+  padding: 26px 28px;
+}
+.workspace-onboarding .servqo-result-card h1 {
+  font-size: 30px;
+  margin: 10px 0 12px;
+}
+.workspace-onboarding .servqo-result-card > p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.workspace-onboarding .servqo-auth-form {
+  gap: 16px;
+  margin-top: 22px;
+}
+.workspace-onboarding .servqo-auth-form input {
+  height: 46px;
+  font-size: 16px;
+}
+.workspace-onboarding .workspace-progress {
+  font-size: 11px;
+  line-height: 1.6;
+  min-height: 34px;
+}
+.workspace-reference {
+  display: block;
+  font-size: 10px;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+}
+.workspace-onboarding .servqo-result-tagline {
+  font-size: 10px;
+}
+@media (max-height: 750px) {
+  .workspace-onboarding {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .workspace-onboarding .servqo-result-card {
+    padding: 20px 24px;
+  }
+  .workspace-onboarding .servqo-result-card h1 {
+    font-size: 27px;
+  }
+  .workspace-onboarding .servqo-auth-form {
+    gap: 13px;
+    margin-top: 18px;
+  }
+  .workspace-onboarding .servqo-auth-form input {
+    height: 44px;
+  }
+  .workspace-onboarding .servqo-auth-form label {
+    gap: 6px;
+  }
+  .workspace-onboarding .servqo-auth-form .servqo-signin {
+    min-height: 44px;
+  }
+  .workspace-onboarding .servqo-result-tagline {
+    display: none;
+  }
+}
+@media (max-height: 590px) {
+  .workspace-onboarding {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .workspace-onboarding .servqo-result-card {
+    padding: 16px 20px;
+  }
+  .workspace-onboarding .servqo-kicker {
+    display: none;
+  }
+  .workspace-onboarding .servqo-result-card h1 {
+    font-size: 24px;
+    margin-top: 0;
+  }
+  .workspace-onboarding .servqo-auth-form {
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .workspace-onboarding .servqo-auth-form input {
+    height: 42px;
+  }
+  .workspace-onboarding .workspace-progress {
+    min-height: 0;
+  }
+}

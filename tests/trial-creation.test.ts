@@ -27,6 +27,7 @@ beforeEach(() => {
   mocks.db.mockReturnValue({
     transaction: async (fn: (tx: unknown) => unknown) =>
       fn({
+        execute: vi.fn().mockResolvedValue([]),
         insert: (table: unknown) => ({
           values: (value: unknown) => {
             mocks.inserted(table, value);

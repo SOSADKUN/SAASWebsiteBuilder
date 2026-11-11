@@ -18,6 +18,7 @@
     "db:catalog": "tsx scripts/catalog.ts",
     "env:check": "tsx scripts/check-environment.ts",
     "db:check": "tsx scripts/check-database.ts",
+    "workspace:diagnose": "tsx scripts/diagnose-workspace.ts",
     "format": "prettier --write src scripts tests *.ts *.mjs *.json README.md supabase"
   },
   "dependencies": {

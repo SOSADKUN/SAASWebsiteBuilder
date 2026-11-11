@@ -4,6 +4,8 @@ A multi-tenant website builder for independent cafés, built with Next.js App Ro
 
 Merchant-level 14-day trials and the subscription foundation are documented in [docs/SUBSCRIPTIONS.md](docs/SUBSCRIPTIONS.md). The new migration must be reviewed and applied before deploying this code. Payments remain disconnected; demo buttons never grant paid access.
 
+For a workspace form that stays loading, see [workspace diagnostics and log investigation](docs/WORKSPACE-TROUBLESHOOTING.md). Run `npm run workspace:diagnose` for redacted, read-only connection timings.
+
 ## Requirements
 
 - Node.js 22.x and npm.

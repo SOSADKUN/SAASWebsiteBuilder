@@ -5,6 +5,38 @@ export class WorkspaceCreationError extends Error {
     );
   }
 }
+export function workspaceErrorCode(error: unknown): string {
+  if (error instanceof WorkspaceCreationError) return "TRIAL_CLAIMED";
+  const codes = new Set([
+    "42P01",
+    "42703",
+    "42701",
+    "23505",
+    "23503",
+    "23514",
+    "42501",
+    "57014",
+    "55P03",
+    "53300",
+    "57P01",
+    "ECONNREFUSED",
+    "ENOTFOUND",
+    "ETIMEDOUT",
+    "CONNECT_TIMEOUT",
+    "CONNECTION_CLOSED",
+  ]);
+  let current = error;
+  for (
+    let depth = 0;
+    depth < 5 && current && typeof current === "object";
+    depth++
+  ) {
+    const item = current as { code?: unknown; cause?: unknown };
+    if (typeof item.code === "string" && codes.has(item.code)) return item.code;
+    current = item.cause;
+  }
+  return "UNKNOWN";
+}
 export function workspaceErrorMessage(error: unknown) {
   if (error instanceof WorkspaceCreationError) return error.message;
   let current = error;
@@ -20,6 +52,8 @@ export function workspaceErrorMessage(error: unknown) {
       return "That website address is already in use. Please choose another address.";
     if (record.code === "42501")
       return "Workspace setup needs administrator attention. The database permissions are not configured correctly.";
+    if (record.code === "57014" || record.code === "55P03")
+      return "Workspace setup timed out while waiting for the database. Check your dashboard before trying again, or contact support if this continues.";
     if (
       [
         "ECONNREFUSED",

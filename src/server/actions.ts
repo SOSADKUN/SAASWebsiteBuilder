@@ -1,6 +1,6 @@
 "use server";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import {
@@ -8,6 +8,7 @@ import {
   workspaceErrorMessage,
 } from "@/lib/workspace-errors";
 import { db } from "@/db";
+import { workspaceTrace } from "@/lib/workspace-diagnostics";
 import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
@@ -57,7 +58,16 @@ export async function signOut() {
   redirect("/login");
 }
 export async function createBusiness(form: FormData) {
-  const u = await user();
+  const trace = workspaceTrace();
+  await createBusinessRecord(form, trace);
+  trace.finish();
+  redirect("/dashboard");
+}
+async function createBusinessRecord(
+  form: FormData,
+  trace: ReturnType<typeof workspaceTrace>,
+) {
+  const u = await trace.step("authentication", () => user());
   const name = z.string().min(2).max(100).parse(form.get("name"));
   const slug = z
     .string()
@@ -66,63 +76,81 @@ export async function createBusiness(form: FormData) {
     .max(60)
     .parse(form.get("slug"));
   const database = db();
-  await database.transaction(async (tx) => {
-    await tx
-      .insert(s.profiles)
-      .values({ id: u.id, name: u.email ?? "Merchant" })
-      .onConflictDoNothing();
-    const [merchant] = await tx
-      .insert(s.merchants)
-      .values({ name, slug })
-      .returning();
-    const claims = await tx
-      .insert(s.merchantTrialClaims)
-      .values({ userId: u.id, merchantId: merchant.id })
-      .onConflictDoNothing()
-      .returning();
-    if (!claims.length) throw new WorkspaceCreationError();
-    await tx
-      .insert(s.memberships)
-      .values({ merchantId: merchant.id, userId: u.id });
-    const [website] = await tx
-      .insert(s.websites)
-      .values({ merchantId: merchant.id, title: name })
-      .returning();
-    await tx.insert(s.pages).values({
-      merchantId: merchant.id,
-      websiteId: website.id,
-      title: "Home",
-      draft: initialLayout(name),
-    });
-    for (const [position, category] of [
-      "Coffee",
-      "Tea",
-      "Pastries",
-      "Food",
-      "Other",
-    ].entries())
-      await tx
-        .insert(s.categories)
-        .values({ merchantId: merchant.id, name: category, position });
-  });
-  redirect("/dashboard");
+  await trace.step("database_transaction", () =>
+    database.transaction(async (tx) => {
+      await trace.step("transaction_limits", () =>
+        tx.execute(
+          sql`SELECT set_config('statement_timeout','15000',true), set_config('lock_timeout','5000',true), set_config('idle_in_transaction_session_timeout','20000',true)`,
+        ),
+      );
+      await trace.step("profile", () =>
+        tx
+          .insert(s.profiles)
+          .values({ id: u.id, name: u.email ?? "Merchant" })
+          .onConflictDoNothing(),
+      );
+      const [merchant] = await trace.step("merchant", () =>
+        tx.insert(s.merchants).values({ name, slug }).returning(),
+      );
+      const claims = await trace.step("trial_claim", () =>
+        tx
+          .insert(s.merchantTrialClaims)
+          .values({ userId: u.id, merchantId: merchant.id })
+          .onConflictDoNothing()
+          .returning(),
+      );
+      if (!claims.length) throw new WorkspaceCreationError();
+      await trace.step("membership", () =>
+        tx
+          .insert(s.memberships)
+          .values({ merchantId: merchant.id, userId: u.id }),
+      );
+      const [website] = await trace.step("website", () =>
+        tx
+          .insert(s.websites)
+          .values({ merchantId: merchant.id, title: name })
+          .returning(),
+      );
+      await trace.step("homepage", () =>
+        tx.insert(s.pages).values({
+          merchantId: merchant.id,
+          websiteId: website.id,
+          title: "Home",
+          draft: initialLayout(name),
+        }),
+      );
+      await trace.step("categories", () =>
+        tx
+          .insert(s.categories)
+          .values(
+            ["Coffee", "Tea", "Pastries", "Food", "Other"].map(
+              (name, position) => ({ merchantId: merchant.id, name, position }),
+            ),
+          ),
+      );
+    }),
+  );
 }
 export async function createWorkspace(
-  _previous: { error: string },
+  _previous: { error: string; reference?: string },
   form: FormData,
-): Promise<{ error: string }> {
+): Promise<{ error: string; reference?: string }> {
+  const trace = workspaceTrace();
   try {
-    await createBusiness(form);
-    return { error: "" };
+    await createBusinessRecord(form, trace);
   } catch (error) {
     unstable_rethrow(error);
+    trace.fail(error);
     return {
       error:
         error instanceof z.ZodError
           ? "Enter a business name and a valid website address using lowercase letters, numbers and single hyphens."
           : workspaceErrorMessage(error),
+      reference: trace.reference,
     };
   }
+  trace.finish();
+  redirect("/dashboard");
 }
 export async function saveLayout(
   merchantId: string,
