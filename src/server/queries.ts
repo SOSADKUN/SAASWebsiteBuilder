@@ -3,14 +3,18 @@ import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { user, authorize } from "@/lib/auth";
-export async function dashboardData() {
+import {
+  capabilitiesForRole,
+  type MerchantCapability,
+} from "@/lib/merchant-capabilities";
+export async function dashboardData(requiredCapability?: MerchantCapability) {
   const u = await user();
   const database = db();
   const membership = await database.query.memberships.findFirst({
     where: eq(s.memberships.userId, u.id),
   });
   if (!membership) return null;
-  await authorize(membership.merchantId);
+  await authorize(membership.merchantId, requiredCapability);
   const merchantId = membership.merchantId;
   const [
     business,
@@ -59,6 +63,7 @@ export async function dashboardData() {
     catalog,
     prices,
     email: u.email ?? "",
+    navigationCapabilities: capabilitiesForRole(membership.role),
   };
 }
 export async function publicData(slug: string, path = "/") {

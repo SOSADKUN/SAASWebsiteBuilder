@@ -191,6 +191,17 @@
   top: 0;
   left: 0;
 }
+.design-scaled-content .cafe-site:has(.site-mobile-nav[open]) {
+  min-height: 360px;
+}
+.design-scaled-content .cafe-site {
+  overflow: visible;
+}
+.version-update {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 9px;
+}
 .viewport-mobile,
 .viewport-tablet {
   padding: 24px 0;

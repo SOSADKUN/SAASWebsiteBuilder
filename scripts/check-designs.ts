@@ -43,7 +43,7 @@ async function main() {
   await send("Runtime.enable");
   await mkdir(".design-qa", { recursive: true });
   const failures: string[] = [];
-  for (const width of [1280, 768, 390]) {
+  for (const width of process.argv.includes('--gallery-only')?[]:[1280, 768, 390]) {
     await send("Emulation.setDeviceMetricsOverride", {
       width,
       height: 1000,
@@ -153,6 +153,26 @@ async function main() {
   await writeFile(
     ".design-qa/gallery-1280.png",
     Buffer.from(galleryScreenshot.data as string, "base64"),
+  );
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  const mobileGallery = await send("Runtime.evaluate", {
+    expression: `(async()=>{await new Promise(r=>setTimeout(r,300));return document.documentElement.scrollWidth<=innerWidth+1;})()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (!(mobileGallery.result as { value: boolean }).value)
+    failures.push("Gallery overflows at 390px");
+  const mobileScreenshot = await send("Page.captureScreenshot", {
+    format: "png",
+  });
+  await writeFile(
+    ".design-qa/gallery-390.png",
+    Buffer.from(mobileScreenshot.data as string, "base64"),
   );
   await writeFile(
     ".design-qa/results.json",

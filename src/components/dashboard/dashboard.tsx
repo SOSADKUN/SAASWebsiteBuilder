@@ -1,17 +1,21 @@
-"use client";
-import { useState, useTransition, useEffect } from "react";
+﻿"use client";
+import { useState, useTransition, useEffect, useCallback, useRef } from "react";
+import { MerchantSidebar } from "./sidebar";
+import { useMerchantWorkspace } from "./workspace-state";
+import {
+  navigationForView,
+  navigationForPath,
+  groupForView,
+} from "@/lib/dashboard-navigation";
 import { useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
   PanelsTopLeft,
   Files,
   UtensilsCrossed,
   ShoppingBag,
   Boxes,
   Images,
-  Settings,
   ArrowUpRight,
-  ChevronDown,
   Plus,
   Search,
   Check,
@@ -19,11 +23,9 @@ import {
   Menu,
   Sun,
   Moon,
-  LogOut,
   ExternalLink,
   ArrowRight,
   X,
-  Coffee,
   Globe,
   ChevronRight,
   Leaf,
@@ -33,31 +35,9 @@ import { MenuManager } from "./menu-manager";
 import { ComponentGallery } from "@/components/designs/component-gallery";
 import { Editor } from "@/components/editor/editor";
 import { WebsiteRenderer } from "@/components/website/registry";
-import {
-  definitions,
-  defaultSettings,
-  applyDesign,
-  type Section,
-} from "@/lib/models";
-import {
-  unlock,
-  upload,
-  updateBusiness,
-  signOut,
-  createPage,
-} from "@/server/actions";
+import { definitions, defaultSettings, applyDesign } from "@/lib/models";
+import { unlock, upload, updateBusiness, createPage } from "@/server/actions";
 
-const navigation = [
-  ["Overview", LayoutDashboard],
-  ["Website Editor", PanelsTopLeft],
-  ["Design Gallery", PanelsTopLeft],
-  ["Pages", Files],
-  ["Menu Manager", UtensilsCrossed],
-  ["Component Store", ShoppingBag],
-  ["My Components", Boxes],
-  ["Media Library", Images],
-  ["Website Settings", Settings],
-] as const;
 export function Dashboard({
   data,
   initialTab = "Overview",
@@ -68,19 +48,23 @@ export function Dashboard({
   const router = useRouter();
   const [tab, setTab] = useState(initialTab);
   const [sidebar, setSidebar] = useState(false);
-  const [dark, setDark] = useState(false);
-  const [pageId, setPageId] = useState(data.pages[0]?.id);
-  const [workingLayouts, setWorkingLayouts] = useState<
-    Record<string, Section[]>
-  >(() => Object.fromEntries(data.pages.map((p) => [p.id, p.draft])));
-  const [designHistory, setDesignHistory] = useState<Record<string, string[]>>(
-    () =>
-      Object.fromEntries(
-        data.pages.map((p) => [p.id, p.draft.map((s) => s.key)]),
-      ),
-  );
+  const sidebarTrigger = useRef<HTMLButtonElement>(null);
+  const closeSidebar = useCallback(() => {
+    setSidebar(false);
+    sidebarTrigger.current?.focus();
+  }, []);
+  const {
+    dark,
+    setDark,
+    pageId,
+    setPageId,
+    workingLayouts,
+    setWorkingLayouts,
+    designHistory,
+    setDesignHistory,
+  } = useMerchantWorkspace();
   const [notice, setNotice] = useState("");
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(initialTab === "Preview / Publish");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All components");
   const [storePreview, setStorePreview] = useState<string | null>(null);
@@ -130,7 +114,26 @@ export function Dashboard({
     setTab(next);
     setSidebar(false);
     setNotice("");
+    const destination = navigationForView(next);
+    if (destination?.href && window.location.pathname !== destination.href)
+      window.history.pushState(null, "", destination.href);
+    if (next === "Preview / Publish") setPreview(true);
   }
+  useEffect(() => {
+    const restoreNavigation = () => {
+      const item = navigationForPath(window.location.pathname);
+      if (item?.view) {
+        setTab(item.view);
+        setSidebar(false);
+        setPreview(item.view === "Preview / Publish");
+      }
+    };
+    window.addEventListener("popstate", restoreNavigation);
+    return () => window.removeEventListener("popstate", restoreNavigation);
+  }, []);
+  const isEditor = tab === "Website Editor" || tab === "Preview / Publish";
+  const currentNavigation = navigationForView(tab);
+  const currentGroup = groupForView(tab);
   function applyToWorkingPage(key: string) {
     if (!page || !available.includes(key) || !unlocked.includes(key)) return;
     setWorkingLayouts((previous) => ({
@@ -143,84 +146,48 @@ export function Dashboard({
     }));
     setDesignHistory((previous) => ({
       ...previous,
-      [page.id]: [key, ...(previous[page.id] ?? []).filter((k) => k !== key)],
+      [page.id]: [
+        key,
+        ...(previous[page.id] ?? page.draft.map((s) => s.key)).filter(
+          (k) => k !== key,
+        ),
+      ],
     }));
   }
   return (
     <div className={`app-shell ${dark ? "dark" : ""}`}>
-      <aside className={`sidebar ${sidebar ? "open" : ""}`}>
-        <a className="brand" href="/dashboard">
-          <span className="brand-icon">b.</span>bloom
-          <span className="brand-dot">®</span>
-        </a>
-        <div className="workspace-switch">
-          <span className="business-avatar">
-            <Coffee size={20} />
-          </span>
-          <div>
-            <b>{data.business.name}</b>
-            <small>YOUR WORKSPACE</small>
-          </div>
-          <ChevronDown size={14} />
-        </div>
-        <span className="nav-label">WORKSPACE</span>
-        <nav>
-          {navigation.map(([label, Icon]) => (
-            <button
-              key={label}
-              className={tab === label ? "nav-item active" : "nav-item"}
-              onClick={() => navigate(label)}
-            >
-              <Icon size={18} />
-              {label}
-              {label === "Component Store" && (
-                <span className="new-badge">NEW</span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-promo">
-            <span>✦ MADE FOR YOUR NEXT CHAPTER</span>
-            <h3>A little more possibility.</h3>
-            <p>Find a fresh look for your growing business.</p>
-            <button onClick={() => navigate("Component Store")}>
-              Explore components <ArrowUpRight size={14} />
-            </button>
-          </div>
-          <button className="theme-toggle" onClick={() => setDark(!dark)}>
-            {dark ? <Sun size={16} /> : <Moon size={16} />}{" "}
-            {dark ? "Light appearance" : "Dark appearance"}
-          </button>
-          <div className="profile">
-            <span className="user-avatar">
-              {data.email.slice(0, 1).toUpperCase()}
-            </span>
-            <div>
-              <b>Your account</b>
-              <small>{data.email}</small>
-            </div>
-            <form action={signOut}>
-              <button className="icon-button" aria-label="Sign out">
-                <LogOut size={16} />
-              </button>
-            </form>
-          </div>
-        </div>
-      </aside>
+      <MerchantSidebar
+        businessName={data.business.name}
+        logoUrl={
+          data.pages
+            .find((p) => p.path === "/")
+            ?.draft.find((s) => s.key.startsWith("header"))?.settings.image
+        }
+        email={data.email}
+        view={tab}
+        open={sidebar}
+        dark={dark}
+        capabilities={data.navigationCapabilities}
+        onNavigate={navigate}
+        onClose={closeSidebar}
+        onThemeToggle={() => setDark(!dark)}
+      />
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
             <button
               className="icon-button mobile-menu"
+              ref={sidebarTrigger}
               onClick={() => setSidebar(!sidebar)}
               aria-label="Toggle sidebar"
+              aria-controls="merchant-sidebar"
+              aria-expanded={sidebar}
             >
               <Menu size={20} />
             </button>
-            <span>Workspace</span>
+            <span>{currentGroup?.label ?? "Workspace"}</span>
             <ChevronRight size={13} />
-            <b>{tab}</b>
+            <b>{currentNavigation?.label ?? tab}</b>
           </div>
           <div className="topbar-actions">
             <span className="live-label">
@@ -243,11 +210,7 @@ export function Dashboard({
             </span>
           </div>
         </header>
-        <main
-          className={
-            tab === "Website Editor" ? "editor-main" : "dashboard-main"
-          }
-        >
+        <main className={isEditor ? "editor-main" : "dashboard-main"}>
           {notice && (
             <div className="notice toast" role="status">
               {notice}
@@ -431,7 +394,7 @@ export function Dashboard({
               </div>
             </>
           )}
-          {tab === "Website Editor" && page && (
+          {isEditor && page && (
             <Editor
               key={page.id}
               page={page}
@@ -463,7 +426,7 @@ export function Dashboard({
               onPageChange={setPageId}
               catalog={catalog}
               unlocked={unlocked}
-              history={designHistory[page.id] ?? []}
+              history={designHistory[page.id] ?? page.draft.map((s) => s.key)}
               onApply={applyToWorkingPage}
               onUnlock={async (key) => {
                 await unlock(data.business.id, key);
@@ -736,15 +699,63 @@ export function Dashboard({
               )}
             </>
           )}
-          {tab === "Menu Manager" && (
-            <MenuManager data={data} run={run} pending={pending} />
+          {(tab === "Menu Manager" || tab === "Category Management") && (
+            <div
+              className={
+                tab === "Category Management" ? "category-management-view" : ""
+              }
+            >
+              <MenuManager data={data} run={run} pending={pending} />
+            </div>
+          )}
+          {tab === "General Settings" && (
+            <>
+              <PageHeading
+                eyebrow="YOUR WORKSPACE"
+                title="General settings"
+                description="Choose how your workspace looks and manage your business details."
+              />
+              <section className="panel general-settings-panel">
+                <h3>Appearance</h3>
+                <p>
+                  Use the same appearance throughout your merchant workspace.
+                </p>
+                <div>
+                  <button
+                    className={`button ${!dark ? "primary" : ""}`}
+                    aria-pressed={!dark}
+                    onClick={() => setDark(false)}
+                  >
+                    <Sun size={16} /> Light
+                  </button>
+                  <button
+                    className={`button ${dark ? "primary" : ""}`}
+                    aria-pressed={dark}
+                    onClick={() => setDark(true)}
+                  >
+                    <Moon size={16} /> Dark
+                  </button>
+                </div>
+                <hr />
+                <h3>Business information</h3>
+                <p>
+                  Update your business name, contact details and opening hours.
+                </p>
+                <button
+                  className="button compact"
+                  onClick={() => navigate("Website Settings")}
+                >
+                  Manage business information <ArrowUpRight size={13} />
+                </button>
+              </section>
+            </>
           )}
           {tab === "Media Library" && (
             <>
               <PageHeading
                 eyebrow="YOUR BRAND, IN PICTURES"
                 title="A picture of your world."
-                description="Upload JPEG, PNG or WebP images up to 5 MB."
+                description="Upload JPEG, PNG or WebP images up to 4 MB."
               />
               <div className="upload-zone">
                 <Images size={30} />

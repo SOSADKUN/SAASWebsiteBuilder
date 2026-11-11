@@ -16,9 +16,9 @@ export default async function AdminPage() {
       <header>
         <span className="brand-icon">b.</span>
         <h1>Platform administration</h1>
-        <a className="button compact" href="/dashboard">
+        <Link className="button compact" href="/dashboard">
           Merchant dashboard ↗
-        </a>
+        </Link>
       </header>
       <div className="notice">
         Only registered, deployed React components can be listed. Unpublishing
@@ -117,3 +117,4 @@ export default async function AdminPage() {
     </main>
   );
 }
+import Link from "next/link";

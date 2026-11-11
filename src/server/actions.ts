@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
+import { getApplicationOrigin } from "@/lib/auth-redirect";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
 import {
   initialLayout,
   layoutSchema,
@@ -29,6 +31,7 @@ export async function signUp(form: FormData) {
   const { error } = await client.auth.signUp({
     email: z.email().parse(form.get("email")),
     password: z.string().min(8).parse(form.get("password")),
+    options: { emailRedirectTo: `${getApplicationOrigin()}/auth/confirm` },
   });
   redirect(
     error
@@ -319,8 +322,12 @@ export async function updateBusiness(merchantId: string, form: FormData) {
 export async function upload(merchantId: string, form: FormData) {
   await authorize(merchantId);
   const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0 || file.size > 5 * 1024 * 1024)
-    throw new Error("Choose an image under 5 MB");
+  if (
+    !(file instanceof File) ||
+    file.size === 0 ||
+    file.size > MAX_UPLOAD_BYTES
+  )
+    throw new Error(`Choose an image up to ${MAX_UPLOAD_LABEL}`);
   const bytes = new Uint8Array(await file.arrayBuffer());
   let extension = "";
   if (

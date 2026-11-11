@@ -5,29 +5,34 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { memberships, profiles } from "@/db/schema";
+import {
+  getSupabaseConfiguration,
+  hasSupabaseConfiguration,
+} from "./supabase-config";
+import {
+  roleHasCapability,
+  type MerchantCapability,
+} from "./merchant-capabilities";
 export async function supabase() {
   const jar = await cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => jar.getAll(),
-        setAll: (values) => {
-          try {
-            values.forEach(({ name, value, options }) =>
-              jar.set(name, value, options),
-            );
-          } catch {
-            /* Server Components cannot set cookies; proxy refreshes sessions. */
-          }
-        },
+  const configuration = getSupabaseConfiguration();
+  return createServerClient(configuration.url, configuration.key, {
+    cookies: {
+      getAll: () => jar.getAll(),
+      setAll: (values) => {
+        try {
+          values.forEach(({ name, value, options }) =>
+            jar.set(name, value, options),
+          );
+        } catch {
+          /* Server Components cannot set cookies; proxy refreshes sessions. */
+        }
       },
     },
-  );
+  });
 }
 export async function user() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) redirect("/login");
+  if (!hasSupabaseConfiguration()) redirect("/login");
   const client = await supabase();
   const {
     data: { user },
@@ -36,7 +41,10 @@ export async function user() {
   if (error || !user) redirect("/login");
   return user;
 }
-export async function authorize(merchantId: string) {
+export async function authorize(
+  merchantId: string,
+  capability?: MerchantCapability,
+) {
   const u = await user();
   const membership = await db().query.memberships.findFirst({
     where: and(
@@ -45,6 +53,8 @@ export async function authorize(merchantId: string) {
     ),
   });
   if (!membership) throw new Error("Business access denied");
+  if (capability && !roleHasCapability(membership.role, capability))
+    throw new Error("Workspace permission required");
   return u;
 }
 export async function admin() {

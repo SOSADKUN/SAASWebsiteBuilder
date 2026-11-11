@@ -1,6 +1,4 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
+import "./load-env";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
@@ -8,10 +6,15 @@ import * as s from "../src/db/schema";
 import { initialLayout } from "../src/lib/models";
 import { registerCatalog } from "./catalog";
 import { z } from "zod";
+import {
+  getDatabaseUrl,
+  databaseOptions,
+  safeDatabaseError,
+} from "../src/lib/database-config";
 async function main() {
-  const url = z.string().min(1).parse(process.env.DATABASE_URL);
+  const url = getDatabaseUrl(undefined, true);
   const userId = z.uuid().parse(process.env.SEED_USER_ID);
-  const client = postgres(url, { prepare: false, max: 1 });
+  const client = postgres(url, databaseOptions(url, true));
   const database = drizzle(client);
   try {
     await registerCatalog(database);
@@ -163,6 +166,6 @@ async function main() {
   }
 }
 main().catch((e) => {
-  console.error(e instanceof Error ? e.message : "Seed failed");
+  console.error(safeDatabaseError(e));
   process.exitCode = 1;
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -67,6 +67,14 @@ export function ComponentGallery({
   const [wholePage, setWholePage] = useState(false);
   const [busy, setBusy] = useState<string>();
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!comparing) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setComparing(false);
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [comparing]);
   const designs = definitions.filter(
     (d) =>
       catalog.some((c) => c.key === d.key && c.active) &&
@@ -186,9 +194,9 @@ export function ComponentGallery({
                   ? "Heroes"
                   : c === "gallery"
                     ? "Galleries"
-                    : c.charAt(0).toUpperCase() +
-                      c.slice(1) +
-                      (c === "gallery" ? "" : "s")}
+                    : c === "about"
+                      ? "About"
+                      : c.charAt(0).toUpperCase() + c.slice(1) + "s"}
               <small>
                 {
                   definitions.filter(

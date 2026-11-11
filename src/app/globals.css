@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./website.css";
 @import "./design-gallery.css";
+@import "./dashboard-navigation.css";
 .cafe-logo {
   width: 44px;
   height: 44px;

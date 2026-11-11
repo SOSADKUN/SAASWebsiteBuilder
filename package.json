@@ -2,6 +2,9 @@
   "name": "bloom-builder",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,6 +16,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:catalog": "tsx scripts/catalog.ts",
+    "env:check": "tsx scripts/check-environment.ts",
+    "db:check": "tsx scripts/check-database.ts",
     "format": "prettier --write src scripts tests *.ts *.mjs *.json README.md supabase"
   },
   "dependencies": {

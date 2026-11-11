@@ -1,11 +1,14 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
+import "./load-env";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { definitions, settingsSchema } from "../src/lib/models";
 import * as s from "../src/db/schema";
 import { z } from "zod";
+import {
+  getDatabaseUrl,
+  databaseOptions,
+  safeDatabaseError,
+} from "../src/lib/database-config";
 export async function registerCatalog(database: ReturnType<typeof drizzle>) {
   await database.transaction(async (tx) => {
     for (const definition of definitions) {
@@ -35,8 +38,8 @@ export async function registerCatalog(database: ReturnType<typeof drizzle>) {
   });
 }
 async function main() {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-  const client = postgres(process.env.DATABASE_URL, { prepare: false, max: 1 });
+  const connectionUrl = getDatabaseUrl(undefined, true);
+  const client = postgres(connectionUrl, databaseOptions(connectionUrl, true));
   try {
     await registerCatalog(drizzle(client));
     console.log(
@@ -48,6 +51,6 @@ async function main() {
 }
 if (process.argv[1]?.replaceAll("\\", "/").endsWith("/catalog.ts"))
   main().catch((e) => {
-    console.error(e instanceof Error ? e.message : "Catalog update failed");
+    console.error(safeDatabaseError(e));
     process.exitCode = 1;
   });
