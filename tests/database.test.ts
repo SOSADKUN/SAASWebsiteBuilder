@@ -30,8 +30,14 @@ beforeAll(async () => {
  `);
   for (const filename of (await readdir("drizzle"))
     .filter((f) => f.endsWith(".sql"))
-    .sort())
+    .sort()) {
+    if (filename.startsWith("0002")) {
+      await database.exec(
+        "INSERT INTO merchants(id,name,slug,created_at) VALUES ('99999999-9999-4999-8999-999999999999','Existing business','existing-business','2020-01-01T00:00:00Z')",
+      );
+    }
     await database.exec(await readFile(`drizzle/${filename}`, "utf8"));
+  }
   await database.exec(await readFile("supabase/policies.sql", "utf8"));
   await database.exec(`
  INSERT INTO user_profiles(id,name) VALUES ('${userA}','A'),('${userB}','B');
@@ -52,13 +58,157 @@ async function asUser(role: string, id = userA) {
   await database.exec(`SET ROLE ${role}`);
 }
 describe("PostgreSQL migrations and tenant RLS", () => {
+  it("backfills old trials without restarting or deleting existing merchants", async () => {
+    await asUser("postgres");
+    const result = await database.query<{
+      name: string;
+      days: number;
+      status: string;
+    }>(
+      "SELECT m.name,extract(epoch from (m.trial_ends_at-m.trial_started_at))/86400 AS days,s.status FROM merchants m JOIN merchant_subscriptions s ON s.merchant_id=m.id WHERE m.slug='existing-business'",
+    );
+    expect(result.rows[0]).toMatchObject({
+      name: "Existing business",
+      status: "expired",
+    });
+    expect(Number(result.rows[0].days)).toBe(14);
+  });
+  it("automatically starts a merchant trial once and preserves it across staff and business updates", async () => {
+    await asUser("postgres");
+    const before = await database.query(
+      "SELECT trial_started_at,trial_ends_at FROM merchants WHERE id=$1",
+      [merchantA],
+    );
+    await database.query(
+      "INSERT INTO merchant_users(merchant_id,user_id,role) VALUES ($1,$2,'editor')",
+      [merchantA, userB],
+    );
+    await database.query(
+      "UPDATE merchants SET name='Renamed business' WHERE id=$1",
+      [merchantA],
+    );
+    expect(
+      (
+        await database.query(
+          "SELECT trial_started_at,trial_ends_at FROM merchants WHERE id=$1",
+          [merchantA],
+        )
+      ).rows,
+    ).toEqual(before.rows);
+    expect(
+      (
+        await database.query(
+          "SELECT * FROM subscription_events WHERE merchant_id=$1 AND kind='trial_started'",
+          [merchantA],
+        )
+      ).rows,
+    ).toHaveLength(1);
+    await database.query(
+      "DELETE FROM merchant_users WHERE merchant_id=$1 AND user_id=$2",
+      [merchantA, userB],
+    );
+    await expect(
+      database.query(
+        "UPDATE merchants SET trial_ends_at=CURRENT_TIMESTAMP+interval '100 days' WHERE id=$1",
+        [merchantA],
+      ),
+    ).rejects.toThrow(/trial dates cannot be changed/);
+  });
+  it("denies browser writes to billing and scopes billing reads to each tenant", async () => {
+    await asUser("authenticated");
+    expect(
+      (
+        await database.query<{ merchant_id: string }>(
+          "SELECT merchant_id FROM merchant_subscriptions",
+        )
+      ).rows,
+    ).toEqual([{ merchant_id: merchantA }]);
+    for (const query of [
+      "UPDATE merchant_subscriptions SET status='active'",
+      "UPDATE merchants SET trial_ends_at=CURRENT_TIMESTAMP+interval '100 days'",
+      "INSERT INTO subscription_events(merchant_id,kind) VALUES ('" +
+        merchantA +
+        "','paid')",
+      "INSERT INTO merchant_trial_claims(user_id,merchant_id) VALUES ('" +
+        userA +
+        "','" +
+        merchantA +
+        "')",
+    ])
+      await expect(database.exec(query)).rejects.toThrow(/permission denied/);
+  });
+  it("retains unique immutable trial claims and append-only event history", async () => {
+    await asUser("postgres");
+    await database.query(
+      "INSERT INTO merchant_trial_claims(user_id,merchant_id) VALUES ($1,$2)",
+      [userA, merchantA],
+    );
+    await expect(
+      database.query(
+        "INSERT INTO merchant_trial_claims(user_id,merchant_id) VALUES ($1,$2)",
+        [userA, merchantB],
+      ),
+    ).rejects.toThrow(/duplicate key/);
+    await expect(
+      database.exec("DELETE FROM merchant_trial_claims"),
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      database.exec("UPDATE subscription_events SET kind='paid'"),
+    ).rejects.toThrow(/append-only/);
+  });
+  it("rejects unverified paid access and audits verified server changes", async () => {
+    await asUser("postgres");
+    await expect(
+      database.query(
+        "UPDATE merchant_subscriptions SET status='active' WHERE merchant_id=$1",
+        [merchantA],
+      ),
+    ).rejects.toThrow(/active_subscription_verified/);
+    await database.query(
+      "UPDATE merchant_subscriptions SET status='active',payment_verified_at=CURRENT_TIMESTAMP,verification_source='provider',current_period_ends_at=CURRENT_TIMESTAMP+interval '30 days' WHERE merchant_id=$1",
+      [merchantA],
+    );
+    expect(
+      (
+        await database.query(
+          "SELECT * FROM subscription_events WHERE merchant_id=$1 AND kind='subscription_changed'",
+          [merchantA],
+        )
+      ).rows,
+    ).toHaveLength(1);
+  });
+  it("blocks direct storage uploads after expiry but preserves tenant data reads", async () => {
+    await asUser("postgres");
+    // The migration fixture has an expired trial; give A membership without restarting it.
+    const old = "99999999-9999-4999-8999-999999999999";
+    await database.query(
+      "INSERT INTO merchant_users(merchant_id,user_id,role) VALUES ($1,$2,'editor')",
+      [old, userA],
+    );
+    await asUser("authenticated");
+    expect(
+      (await database.query("SELECT id FROM merchants WHERE id=$1", [old]))
+        .rows,
+    ).toHaveLength(1);
+    await expect(
+      database.query(
+        "INSERT INTO storage.objects(bucket_id,name) VALUES ('merchant-media',$1)",
+        [old + "/blocked.jpg"],
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await asUser("postgres");
+    await database.query(
+      "DELETE FROM merchant_users WHERE merchant_id=$1 AND user_id=$2",
+      [old, userA],
+    );
+  });
   it("migrates all application tables and enables RLS", async () => {
     await asUser("postgres");
     const result = await database.query<{
       tablename: string;
       rowsecurity: boolean;
     }>("SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname='public'");
-    expect(result.rows).toHaveLength(14);
+    expect(result.rows).toHaveLength(18);
     expect(result.rows.every((t) => t.rowsecurity)).toBe(true);
   });
   it("only lets each merchant read its own business and menu records", async () => {

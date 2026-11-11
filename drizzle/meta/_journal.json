@@ -15,6 +15,13 @@
       "when": 1794371253299,
       "tag": "0001_grey_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794388721074,
+      "tag": "0002_third_gargoyle",
+      "breakpoints": true
     }
   ]
 }

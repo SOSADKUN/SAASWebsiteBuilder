@@ -9,7 +9,9 @@ import {
   uniqueIndex,
   index,
   foreignKey,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { Section } from "../lib/models";
 const id = () => uuid("id").primaryKey().defaultRandom();
 const created = () =>
@@ -28,6 +30,12 @@ export const merchants = pgTable("merchants", {
   address: text("address").notNull().default(""),
   hours: text("hours").notNull().default(""),
   phone: text("phone").notNull().default(""),
+  trialStartedAt: timestamp("trial_started_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true })
+    .default(sql`CURRENT_TIMESTAMP + interval '336 hours'`)
+    .notNull(),
   createdAt: created(),
   updatedAt: created(),
 });
@@ -254,3 +262,78 @@ export const pageSections = pgTable(
     }),
   ],
 );
+
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+});
+export const merchantSubscriptions = pgTable(
+  "merchant_subscriptions",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .unique()
+      .references(() => merchants.id),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => subscriptionPlans.id),
+    status: text("status")
+      .$type<"trialing" | "active" | "past_due" | "canceled" | "expired">()
+      .notNull()
+      .default("trialing"),
+    currentPeriodEndsAt: timestamp("current_period_ends_at", {
+      withTimezone: true,
+    }),
+    paymentVerifiedAt: timestamp("payment_verified_at", { withTimezone: true }),
+    verificationSource: text("verification_source").$type<
+      "provider" | "admin"
+    >(),
+    createdAt: created(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    check(
+      "subscription_status_valid",
+      sql`${t.status} IN ('trialing','active','past_due','canceled','expired')`,
+    ),
+    check(
+      "subscription_verification_source_valid",
+      sql`${t.verificationSource} IS NULL OR ${t.verificationSource} IN ('provider','admin')`,
+    ),
+    check(
+      "active_subscription_verified",
+      sql`${t.status} <> 'active' OR (${t.paymentVerifiedAt} IS NOT NULL AND ${t.verificationSource} IS NOT NULL AND ${t.currentPeriodEndsAt} IS NOT NULL)`,
+    ),
+  ],
+);
+export const subscriptionEvents = pgTable(
+  "subscription_events",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id),
+    kind: text("kind").notNull(),
+    details: jsonb("details")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: created(),
+  },
+  (t) => [index("subscription_events_merchant").on(t.merchantId, t.createdAt)],
+);
+// Durable subject-ID claims deliberately survive deletion of an Auth account.
+// A different email on the same authenticated account cannot obtain a new trial.
+export const merchantTrialClaims = pgTable("merchant_trial_claims", {
+  userId: uuid("user_id").primaryKey(),
+  merchantId: uuid("merchant_id")
+    .notNull()
+    .references(() => merchants.id),
+  claimedAt: created(),
+});

@@ -2,6 +2,8 @@
 
 A multi-tenant website builder for independent cafés, built with Next.js App Router, React, strict TypeScript, Tailwind CSS, Supabase Auth/Storage/PostgreSQL, Drizzle, dnd-kit, Zod, and Lucide. This is a server-backed application: drafts, published layouts, products, media records, and demo entitlements live in PostgreSQL. There is no local-storage substitute for persistence.
 
+Merchant-level 14-day trials and the subscription foundation are documented in [docs/SUBSCRIPTIONS.md](docs/SUBSCRIPTIONS.md). The new migration must be reviewed and applied before deploying this code. Payments remain disconnected; demo buttons never grant paid access.
+
 ## Requirements
 
 - Node.js 22.x and npm.

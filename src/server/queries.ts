@@ -3,6 +3,7 @@ import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { user, authorize } from "@/lib/auth";
+import { subscriptionSnapshot } from "@/lib/subscription-service";
 import {
   capabilitiesForRole,
   type MerchantCapability,
@@ -54,6 +55,7 @@ export async function dashboardData(requiredCapability?: MerchantCapability) {
   ]);
   if (!business) throw new Error("Business unavailable");
   return {
+    subscription: await subscriptionSnapshot(merchantId),
     business,
     pages,
     products,

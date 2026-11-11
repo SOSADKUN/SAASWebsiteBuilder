@@ -168,6 +168,22 @@ async function main() {
         await sql`SELECT to_regprocedure('public.is_merchant_member(uuid)') AS function`;
       if (!membershipFunction[0]?.function)
         issues.push("Tenant membership function is absent");
+      const subscriptionFunction =
+        await sql`SELECT to_regprocedure('public.merchant_has_subscription(uuid)') AS function`;
+      if (!subscriptionFunction[0]?.function)
+        issues.push("Subscription storage guard function is absent");
+      const subscriptionTriggers = await sql<
+        { name: string }[]
+      >`SELECT tgname AS name FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN (to_regclass('public.merchants'),to_regclass('public.merchant_subscriptions'),to_regclass('public.subscription_events'),to_regclass('public.merchant_trial_claims'))`;
+      for (const name of [
+        "initialize_merchant_trial",
+        "preserve_merchant_trial",
+        "preserve_subscription_events",
+        "preserve_trial_claims",
+        "audit_subscription_change",
+      ])
+        if (!subscriptionTriggers.some((trigger) => trigger.name === name))
+          issues.push(`Missing subscription trigger: ${name}`);
       return {
         connection: "successful",
         expectedTables: Object.keys(schema).length,

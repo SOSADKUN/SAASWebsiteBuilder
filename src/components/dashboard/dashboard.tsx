@@ -1,6 +1,8 @@
 ﻿"use client";
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { MerchantSidebar } from "./sidebar";
+import { SubscriptionPanel } from "./subscription-panel";
+import { subscriptionAccess } from "@/lib/subscription-policy";
 import { useMerchantWorkspace } from "./workspace-state";
 import {
   navigationForView,
@@ -46,6 +48,7 @@ export function Dashboard({
   initialTab?: string;
 }) {
   const router = useRouter();
+  const access = subscriptionAccess(data.subscription);
   const [tab, setTab] = useState(initialTab);
   const [sidebar, setSidebar] = useState(false);
   const sidebarTrigger = useRef<HTMLButtonElement>(null);
@@ -190,6 +193,14 @@ export function Dashboard({
             <b>{currentNavigation?.label ?? tab}</b>
           </div>
           <div className="topbar-actions">
+            <button
+              className="button compact subscription-badge"
+              onClick={() => navigate("Subscription & Billing")}
+            >
+              {access.status === "trialing"
+                ? `Trial · ${access.remainingDays} days left`
+                : access.status.replaceAll("_", " ")}
+            </button>
             <span className="live-label">
               <span className="status-dot" />
               {page?.published ? "Website live" : "Draft website"}
@@ -211,6 +222,39 @@ export function Dashboard({
           </div>
         </header>
         <main className={isEditor ? "editor-main" : "dashboard-main"}>
+          {!access.allowed && tab !== "Subscription & Billing" && (
+            <div className="notice subscription-expired" role="status">
+              <strong>Your trial has ended.</strong> You can view and export
+              your data. Subscribe to resume changes.{" "}
+              <button
+                className="button compact"
+                onClick={() => navigate("Subscription & Billing")}
+              >
+                View subscription
+              </button>
+            </div>
+          )}
+          {access.status === "trialing" && tab === "Overview" && (
+            <div className="notice">
+              Your 14-day trial ends{" "}
+              {new Date(data.subscription.trialEndsAt)
+                .toISOString()
+                .slice(0, 10)}{" "}
+              (UTC).{" "}
+              <button
+                className="text-button"
+                onClick={() => navigate("Subscription & Billing")}
+              >
+                Upgrade / Subscribe
+              </button>
+            </div>
+          )}
+          {tab === "Subscription & Billing" && (
+            <SubscriptionPanel
+              subscription={data.subscription}
+              merchantId={data.business.id}
+            />
+          )}
           {notice && (
             <div className="notice toast" role="status">
               {notice}

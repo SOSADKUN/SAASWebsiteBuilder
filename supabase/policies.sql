@@ -11,7 +11,7 @@ GRANT EXECUTE ON FUNCTION public.is_merchant_member(uuid) TO authenticated;
 DO $$
 DECLARE t text;
 BEGIN
- FOREACH t IN ARRAY ARRAY['user_profiles','merchants','merchant_users','websites','pages','page_sections','component_definitions','component_versions','store_products','merchant_entitlements','menu_categories','menu_products','media_assets','website_revisions'] LOOP
+ FOREACH t IN ARRAY ARRAY['user_profiles','merchants','merchant_users','websites','pages','page_sections','component_definitions','component_versions','store_products','merchant_entitlements','menu_categories','menu_products','media_assets','website_revisions','subscription_plans','merchant_subscriptions','subscription_events','merchant_trial_claims'] LOOP
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
   EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated', t);
   EXECUTE format('GRANT SELECT ON public.%I TO authenticated', t);
@@ -38,6 +38,7 @@ ON CONFLICT(id) DO UPDATE SET public=true,file_size_limit=5242880,allowed_mime_t
 DROP POLICY IF EXISTS merchant_upload ON storage.objects;
 CREATE POLICY merchant_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (
  bucket_id='merchant-media' AND public.is_merchant_member((storage.foldername(name))[1]::uuid)
+ AND public.merchant_has_subscription((storage.foldername(name))[1]::uuid)
 );
 DROP POLICY IF EXISTS merchant_remove_upload ON storage.objects;
 DROP POLICY IF EXISTS merchant_read_upload ON storage.objects;

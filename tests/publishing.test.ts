@@ -1,3 +1,4 @@
+vi.mock("@/lib/subscription-service", () => ({ requireSubscription: vi.fn() }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initialLayout, definitions } from "../src/lib/models";
 const mocks = vi.hoisted(() => ({

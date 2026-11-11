@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/subscription-service", () => ({ requireSubscription: vi.fn() }));
 const mocks = vi.hoisted(() => ({ signUp: vi.fn(), supabase: vi.fn() }));
 vi.mock("@/lib/auth", () => ({
   supabase: mocks.supabase,
@@ -51,5 +52,30 @@ describe("Supabase sign-up flow", () => {
         "REDIRECT:/signup?error=Enter+a+valid+email",
       );
     expect(mocks.supabase).not.toHaveBeenCalled();
+  });
+  it.each([
+    [
+      "over_email_send_rate_limit",
+      "Deleting an account does not reset the email limit",
+    ],
+    [
+      "email_address_not_authorized",
+      "current email service cannot send confirmation",
+    ],
+    ["weak_password", "password does not meet"],
+    ["signup_disabled", "registration is currently disabled"],
+  ])("explains %s without exposing provider details", async (code, message) => {
+    mocks.signUp.mockResolvedValue({
+      error: { code, message: "private-provider-detail" },
+    });
+    try {
+      await signUp(form());
+    } catch (error) {
+      const result = decodeURIComponent(String(error)).replaceAll("+", " ");
+      expect(result).toContain(message);
+      expect(result).not.toContain("private-provider-detail");
+      return;
+    }
+    throw new Error("Expected a registration error redirect");
   });
 });

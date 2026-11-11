@@ -11,7 +11,8 @@ export type DashboardView =
   | "Preview / Publish"
   | "Component Store"
   | "My Components"
-  | "General Settings";
+  | "General Settings"
+  | "Subscription & Billing";
 export type NavigationItem = {
   id: string;
   label: string;
@@ -146,7 +147,13 @@ export const navigationGroups: NavigationGroup[] = [
         requires: "settings:view",
       },
       { id: "permissions", label: "Staff Permissions", comingSoon: true },
-      { id: "billing", label: "Subscription & Billing", comingSoon: true },
+      {
+        id: "billing",
+        label: "Subscription & Billing",
+        view: "Subscription & Billing",
+        href: "/dashboard/settings/billing",
+        requires: "settings:view",
+      },
       { id: "security", label: "Security", comingSoon: true },
     ],
   },

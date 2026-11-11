@@ -29,6 +29,8 @@ The local review found runtime database, API URL and publishable key configured.
 
 ## Database setup — review before execution
 
+The merchant trial/subscription extension adds a third migration and four tables (18 application tables total). Review [the subscription migration and rollout notes](docs/SUBSCRIPTIONS.md) before applying it; existing merchant trials use original creation dates and can already be expired. This extension has not been applied to the live database during implementation.
+
 Run these commands from the repository root on your development machine or in one controlled migration job, not as the Vercel build command. Windows PowerShell commands are shown; `npm` also works on other platforms.
 
 ```powershell
@@ -128,7 +130,9 @@ For `https://servqo.vercel.app`, set Supabase Site URL to that exact origin and 
 For a production-only Confirm signup email, use this direct application link (not `ConfirmationURL`, which verifies at Supabase before showing the application page):
 
 ```html
-<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Activate your SERVQO account</a>
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email"
+  >Activate your SERVQO account</a
+>
 ```
 
 The existing `RedirectTo` template above also works when its supplied application origin is correctly configured and allowlisted. Keep the Email provider and Confirm email enabled. Deploy the click-to-activate code before testing and request a fresh confirmation email. Existing emails retain their old destinations and may already be expired/used. No database migration or service-role API key is required.

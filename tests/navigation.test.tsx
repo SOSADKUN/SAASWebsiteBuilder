@@ -39,7 +39,6 @@ describe("merchant navigation boundaries", () => {
     for (const path of [
       "/dashboard/pos",
       "/dashboard/orders",
-      "/dashboard/settings/billing",
       "/dashboard/maintenance/employees",
     ])
       expect(navigationForPath(path)).toBeUndefined();

@@ -7,7 +7,9 @@ import { db } from "@/db";
 import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
+import { registrationErrorMessage } from "@/lib/auth-errors";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
+import { requireSubscription } from "@/lib/subscription-service";
 import {
   initialLayout,
   layoutSchema,
@@ -41,7 +43,7 @@ export async function signUp(form: FormData) {
   });
   redirect(
     error
-      ? "/signup?error=Unable+to+register.+Please+try+again."
+      ? `/signup?${new URLSearchParams({ error: registrationErrorMessage(error) })}`
       : "/signup/check-email",
   );
 }
@@ -69,6 +71,15 @@ export async function createBusiness(form: FormData) {
       .insert(s.merchants)
       .values({ name, slug })
       .returning();
+    const claims = await tx
+      .insert(s.merchantTrialClaims)
+      .values({ userId: u.id, merchantId: merchant.id })
+      .onConflictDoNothing()
+      .returning();
+    if (!claims.length)
+      throw new Error(
+        "This account has already created a trial business. Open your existing workspace or contact support; creating another business does not restart the trial.",
+      );
     await tx
       .insert(s.memberships)
       .values({ merchantId: merchant.id, userId: u.id });
@@ -102,7 +113,8 @@ export async function saveLayout(
   expectedRevision: number,
   publish = false,
 ) {
-  await authorize(z.uuid().parse(merchantId));
+  await authorize(z.uuid().parse(merchantId), "website:manage");
+  await requireSubscription(merchantId);
   z.uuid().parse(pageId);
   layoutSchema.parse(sections);
   z.number().int().min(0).parse(expectedRevision);
@@ -170,7 +182,7 @@ export async function saveLayout(
   });
 }
 export async function restoreDraft(merchantId: string, pageId: string) {
-  await authorize(z.uuid().parse(merchantId));
+  await authorize(z.uuid().parse(merchantId), "website:manage");
   const page = await db().query.pages.findFirst({
     where: and(
       eq(s.pages.id, z.uuid().parse(pageId)),
@@ -181,7 +193,8 @@ export async function restoreDraft(merchantId: string, pageId: string) {
   return { sections: page.draft, revision: page.revision };
 }
 export async function unlock(merchantId: string, key: string) {
-  await authorize(z.uuid().parse(merchantId));
+  await authorize(z.uuid().parse(merchantId), "marketplace:use");
+  await requireSubscription(merchantId);
   const definition = await db().query.componentDefinitions.findFirst({
     where: and(
       eq(s.componentDefinitions.key, key),
@@ -210,7 +223,8 @@ export async function saveProduct(
   merchantId: string,
   input: z.infer<typeof productSchema>,
 ) {
-  await authorize(z.uuid().parse(merchantId));
+  await authorize(z.uuid().parse(merchantId), "menu:manage");
+  await requireSubscription(merchantId);
   const value = productSchema.parse(input);
   const database = db();
   const category = await database.query.categories.findFirst({
@@ -233,7 +247,8 @@ export async function saveProduct(
   revalidatePath("/dashboard");
 }
 export async function deleteProduct(merchantId: string, id: string) {
-  await authorize(merchantId);
+  await authorize(merchantId, "menu:manage");
+  await requireSubscription(merchantId);
   await db()
     .delete(s.products)
     .where(
@@ -249,7 +264,8 @@ export async function saveCategory(
   name: string,
   id?: string,
 ) {
-  await authorize(merchantId);
+  await authorize(merchantId, "menu:manage");
+  await requireSubscription(merchantId);
   name = z.string().min(1).max(60).parse(name);
   if (id)
     await db()
@@ -265,7 +281,8 @@ export async function saveCategory(
   revalidatePath("/dashboard");
 }
 export async function deleteCategory(merchantId: string, id: string) {
-  await authorize(merchantId);
+  await authorize(merchantId, "menu:manage");
+  await requireSubscription(merchantId);
   const product = await db().query.products.findFirst({
     where: and(
       eq(s.products.merchantId, merchantId),
@@ -286,7 +303,8 @@ export async function createPage(
   title: string,
   path: string,
 ) {
-  await authorize(merchantId);
+  await authorize(merchantId, "website:manage");
+  await requireSubscription(merchantId);
   title = z.string().min(1).max(80).parse(title);
   path = z
     .string()
@@ -309,7 +327,7 @@ export async function createPage(
   revalidatePath("/dashboard");
 }
 export async function updateBusiness(merchantId: string, form: FormData) {
-  await authorize(merchantId);
+  await authorize(merchantId, "business:manage");
   const value = z
     .object({
       name: z.string().min(2).max(100),
@@ -326,7 +344,8 @@ export async function updateBusiness(merchantId: string, form: FormData) {
   revalidatePath("/dashboard");
 }
 export async function upload(merchantId: string, form: FormData) {
-  await authorize(merchantId);
+  await authorize(merchantId, "website:manage");
+  await requireSubscription(merchantId);
   const file = form.get("file");
   if (
     !(file instanceof File) ||

@@ -450,3 +450,98 @@
     transition: none;
   }
 }
+.subscription-panel {
+  max-width: 960px;
+  margin: auto;
+}
+.subscription-summary {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 28px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+.subscription-summary h2 {
+  font-size: 20px;
+  margin-bottom: 18px;
+}
+.subscription-summary p {
+  line-height: 1.8;
+}
+.subscription-summary dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin: 20px 0;
+}
+.subscription-summary dt {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.subscription-summary dd {
+  margin: 0;
+  font-size: 14px;
+  text-transform: capitalize;
+}
+.subscription-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 18px 0;
+}
+.subscription-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.subscription-expired {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.subscription-badge {
+  text-transform: capitalize;
+}
+.subscription-summary .notice {
+  margin-top: 20px;
+}
+@media (max-width: 600px) {
+  .subscription-summary {
+    padding: 20px;
+  }
+  .subscription-summary dl {
+    grid-template-columns: 1fr;
+  }
+  .topbar-actions .subscription-badge {
+    display: inline-flex;
+    max-width: 145px;
+    white-space: normal;
+  }
+}
+/* The billing badge joins the existing toolbar without forcing narrow screens wide. */
+.topbar:has(.subscription-badge) {
+  height: auto;
+  min-height: 77px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.topbar:has(.subscription-badge) .breadcrumbs {
+  min-width: 0;
+}
+.topbar:has(.subscription-badge) .breadcrumbs b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-actions:has(.subscription-badge) {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+@media (max-width: 900px) {
+  .topbar-actions:has(.subscription-badge) {
+    width: 100%;
+  }
+}
