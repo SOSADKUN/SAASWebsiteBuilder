@@ -82,6 +82,10 @@ Sign-up supplies the complete `/auth/confirm` redirect URL. For the Confirm sign
 
 Do not append `/auth/confirm` a second time. The handler also supports PKCE `code` callbacks, exchanges the token for an SSR cookie session, and permits only local redirect destinations. Existing email delivery/SMTP configuration must be tested manually. Protected loaders/actions validate the Auth user server-side; merchant membership and administrator role checks remain in place. Never grant administrator privileges through user-editable metadata.
 
+After registration, `/signup/check-email` opens an accessible inbox reminder popup. Successful token/code verification redirects to `/auth/confirmed`, which validates the confirmed user through Supabase before showing activation success. Expired links and provider failures have dedicated messages; confirmation does not load merchant database records until the user continues to the workspace.
+
+For local development on port 3000, use Site URL `http://localhost:3000` and allow `http://localhost:3000/auth/confirm`. If running a different port, set `NEXT_PUBLIC_APP_URL` to that local origin and allow its callback URL. Use `npm run dev` for local HTTP; production mode requires an HTTPS app origin. After changing the email template or redirect allowlist, register a test account or request a fresh email; old links retain their original destinations. Never share the full confirmation URL, token, or auth code in logs/screenshots.
+
 ## Deploy manually from GitHub
 
 1. Review and commit the intended code changes to `SOSADKUN/SAASWebsiteBuilder`, including the lockfile, migrations and deployment helpers. Check `git status` and ensure credentials are excluded. No commit or push was made by this review.

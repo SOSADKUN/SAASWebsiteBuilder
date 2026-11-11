@@ -27,16 +27,22 @@ export async function signIn(form: FormData) {
   redirect("/dashboard");
 }
 export async function signUp(form: FormData) {
+  const credentials = z
+    .object({ email: z.email(), password: z.string().min(8) })
+    .safeParse({ email: form.get("email"), password: form.get("password") });
+  if (!credentials.success)
+    redirect(
+      "/signup?error=Enter+a+valid+email+and+a+password+of+at+least+8+characters.",
+    );
   const client = await supabase();
   const { error } = await client.auth.signUp({
-    email: z.email().parse(form.get("email")),
-    password: z.string().min(8).parse(form.get("password")),
+    ...credentials.data,
     options: { emailRedirectTo: `${getApplicationOrigin()}/auth/confirm` },
   });
   redirect(
     error
-      ? "/login?error=Unable+to+register.+Please+try+again."
-      : "/login?message=Check+your+email+to+confirm+your+account,+then+sign+in.",
+      ? "/signup?error=Unable+to+register.+Please+try+again."
+      : "/signup/check-email",
   );
 }
 export async function signOut() {

@@ -298,7 +298,7 @@
   font-size: 12px;
   color: #74796e;
 }
-.servqo-signup button {
+.servqo-signup a {
   display: flex;
   align-items: center;
   gap: 3px;
@@ -949,4 +949,126 @@
     transition: none;
     transform: none;
   }
+}
+
+.servqo-auth-content > .servqo-signup {
+  margin-top: 22px;
+}
+.servqo-result-page {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  padding: 40px 22px;
+  background:
+    radial-gradient(ellipse at top, #e8ecdf, transparent 65%), #fcfbf8;
+  font-family: "Cafe Sans", Arial, sans-serif;
+  color: #253c32;
+}
+.servqo-result-card {
+  width: 100%;
+  max-width: 470px;
+  padding: 40px 36px;
+  background: #fffefa;
+  border: 1px solid #e1e4d8;
+  box-shadow: 0 20px 65px #263d3210;
+  border-radius: 20px;
+  text-align: center;
+}
+.servqo-result-icon {
+  display: inline-flex;
+  padding: 20px;
+  border-radius: 50%;
+  background: #edf3e9;
+  color: #356a50;
+  margin-bottom: 24px;
+}
+.servqo-result-icon.invalid,
+.servqo-result-icon.unavailable {
+  background: #f8eddb;
+  color: #916c32;
+}
+.servqo-result-card .servqo-kicker {
+  display: block;
+}
+.servqo-result-card h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  margin: 14px 0 20px;
+  font-weight: 500;
+}
+.servqo-result-card p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #586657;
+}
+.servqo-result-card small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #717869;
+  margin: 18px 0 28px;
+}
+.servqo-result-card .servqo-signin {
+  gap: 16px;
+}
+.servqo-result-secondary {
+  display: inline-block;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  margin-top: 20px;
+}
+.servqo-result-tagline {
+  font-size: 11px;
+  color: #737b6e;
+}
+@media (max-width: 400px) {
+  .servqo-result-card {
+    padding: 30px 22px;
+  }
+  .servqo-result-card h1 {
+    font-size: 28px;
+  }
+}
+.servqo-email-backdrop {
+  min-height: 100svh;
+  background:
+    radial-gradient(ellipse at top, #e8ecdf, transparent 65%), #fcfbf8;
+}
+.servqo-email-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  max-width: calc(100vw - 32px);
+  width: 500px;
+  max-height: calc(100svh - 32px);
+  overflow: auto;
+  color: inherit;
+}
+.servqo-email-dialog::backdrop {
+  background: #19362855;
+  backdrop-filter: blur(5px);
+}
+.servqo-email-dialog .servqo-result-page {
+  min-height: 0;
+  border-radius: 22px;
+  padding: 28px 20px;
+  gap: 24px;
+  background: #fcfbf8;
+}
+.servqo-email-dialog .servqo-result-card {
+  padding: 24px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.servqo-email-dialog .servqo-result-tagline {
+  padding-bottom: 10px;
 }

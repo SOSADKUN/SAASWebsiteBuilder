@@ -1,7 +1,13 @@
 "use client";
 import { useFormStatus } from "react-dom";
 import { ArrowRight, LoaderCircle } from "lucide-react";
-export function AuthSubmit({ disabled }: { disabled: boolean }) {
+export function AuthSubmit({
+  disabled,
+  label = "Sign in to your workspace",
+}: {
+  disabled: boolean;
+  label?: string;
+}) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -16,7 +22,7 @@ export function AuthSubmit({ disabled }: { disabled: boolean }) {
         </>
       ) : (
         <>
-          Sign in to your workspace <ArrowRight size={18} />
+          {label} <ArrowRight size={18} />
         </>
       )}
     </button>
