@@ -20,7 +20,7 @@ export function WorkspaceOnboarding() {
       <Brand />
       <section className="servqo-result-card" aria-labelledby="workspace-title">
         <span className="servqo-kicker">MAKE YOURSELF AT HOME</span>
-        <h1 id="workspace-title">Your business starts here.</h1>
+        <h1 id="workspace-title">Create Your Business</h1>
         <p>Choose a name and address. We’ll set up the rest.</p>
         <form action={action} className="servqo-auth-form" aria-busy={pending}>
           {state.error && (

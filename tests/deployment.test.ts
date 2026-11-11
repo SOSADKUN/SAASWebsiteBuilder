@@ -56,6 +56,9 @@ describe("deployment configuration", () => {
       "postgres://user:password@aws-0.example.pooler.supabase.com:6543/postgres",
     );
     expect(options.prepare).toBe(false);
+    expect(options.query_timeout).toBe(15);
+    expect(options.queue_timeout).toBe(10);
+    expect(options.cancel_timeout).toBe(5);
     expect(options.ssl).toMatchObject({ rejectUnauthorized: true });
     expect(safeDatabaseError(new Error("postgres://secret"))).not.toContain(
       "secret",

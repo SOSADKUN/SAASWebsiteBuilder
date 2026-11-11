@@ -24,6 +24,10 @@ export function workspaceErrorCode(error: unknown): string {
     "ETIMEDOUT",
     "CONNECT_TIMEOUT",
     "CONNECTION_CLOSED",
+    "QUERY_TIMEOUT",
+    "QUEUE_TIMEOUT",
+    "CANCEL_TIMEOUT",
+    "CANCEL_UNANSWERED",
   ]);
   let current = error;
   for (
@@ -36,6 +40,23 @@ export function workspaceErrorCode(error: unknown): string {
     current = item.cause;
   }
   return "UNKNOWN";
+}
+export function dashboardErrorMessage(error: unknown) {
+  const code = workspaceErrorCode(error);
+  if (["42P01", "42703"].includes(code))
+    return "Your workspace needs a server database update. Contact support so the pending migrations can be applied.";
+  if (
+    [
+      "QUERY_TIMEOUT",
+      "QUEUE_TIMEOUT",
+      "57014",
+      "55P03",
+      "CANCEL_TIMEOUT",
+      "CANCEL_UNANSWERED",
+    ].includes(code)
+  )
+    return "The workspace database did not respond in time. Please try again. If this continues, contact support.";
+  return "We could not load your workspace. Please try again. If this continues, contact support with the reference below. Your business data has been preserved.";
 }
 export function workspaceErrorMessage(error: unknown) {
   if (error instanceof WorkspaceCreationError) return error.message;

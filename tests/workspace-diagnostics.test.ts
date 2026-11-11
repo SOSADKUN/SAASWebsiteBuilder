@@ -2,6 +2,23 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { workspaceTrace } from "../src/lib/workspace-diagnostics";
 afterEach(() => vi.restoreAllMocks());
 describe("workspace timing diagnostics", () => {
+  it("distinguishes onboarding from an existing dashboard without tenant data", () => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    const trace = workspaceTrace("dashboard.load");
+    trace.ready("onboarding");
+    trace.ready("dashboard");
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries.map((entry) => entry.stage)).toEqual([
+      "onboarding_ready",
+      "dashboard_ready",
+    ]);
+    expect(
+      entries.every(
+        (entry) =>
+          entry.reference === trace.reference && entry.outcome === "completed",
+      ),
+    ).toBe(true);
+  });
   it("identifies expected login redirects without exposing their URLs", async () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => {});
     const trace = workspaceTrace("dashboard.load");

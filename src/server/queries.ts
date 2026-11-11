@@ -10,9 +10,15 @@ import {
   roleHasCapability,
   type MerchantCapability,
 } from "@/lib/merchant-capabilities";
-export async function dashboardData(requiredCapability?: MerchantCapability) {
-  const trace = workspaceTrace("dashboard.load");
-  return trace.step("load", () => loadDashboardData(requiredCapability, trace));
+export async function dashboardData(
+  requiredCapability?: MerchantCapability,
+  trace = workspaceTrace("dashboard.load"),
+) {
+  const data = await trace.step("load", () =>
+    loadDashboardData(requiredCapability, trace),
+  );
+  trace.ready(data ? "dashboard" : "onboarding");
+  return data;
 }
 async function loadDashboardData(
   requiredCapability: MerchantCapability | undefined,

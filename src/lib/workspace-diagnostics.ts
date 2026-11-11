@@ -55,6 +55,8 @@ export function workspaceTrace(operation = "workspace.create") {
       }
     },
     finish: () => log("ready_to_redirect", "completed"),
+    ready: (destination: "onboarding" | "dashboard") =>
+      log(`${destination}_ready`, "completed"),
     fail: (error: unknown) =>
       log("request", "failed", { errorCode: workspaceErrorCode(error) }),
   };

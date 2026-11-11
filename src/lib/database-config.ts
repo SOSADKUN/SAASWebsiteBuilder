@@ -46,6 +46,11 @@ export function databaseOptions(connectionUrl: string, migration = false) {
     max: migration ? 1 : 3,
     idle_timeout: 20,
     connect_timeout: 10,
+    // Bound both pool starvation and stalled SQL at the driver, which cancels
+    // timed-out queries instead of leaving work running behind a UI timer.
+    queue_timeout: 10,
+    query_timeout: 15,
+    cancel_timeout: 5,
     ssl: local
       ? false
       : supabase
