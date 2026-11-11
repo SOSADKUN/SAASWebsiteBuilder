@@ -37,7 +37,6 @@ export const merchants = pgTable("merchants", {
     .default(sql`CURRENT_TIMESTAMP + interval '336 hours'`)
     .notNull(),
   createdAt: created(),
-  updatedAt: created(),
 });
 export const memberships = pgTable(
   "merchant_users",

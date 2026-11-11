@@ -960,6 +960,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  min-width: 0;
   gap: 32px;
   padding: 40px 22px;
   background:
@@ -976,6 +978,8 @@
   box-shadow: 0 20px 65px #263d3210;
   border-radius: 20px;
   text-align: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .servqo-result-icon {
   display: inline-flex;
@@ -1014,6 +1018,11 @@
 }
 .servqo-result-card .servqo-signin {
   gap: 16px;
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  min-width: 0;
 }
 .servqo-result-secondary {
   display: inline-block;
@@ -1071,4 +1080,62 @@
 }
 .servqo-email-dialog .servqo-result-tagline {
   padding-bottom: 10px;
+}
+.workspace-onboarding .servqo-auth-form {
+  text-align: left;
+}
+.workspace-onboarding .servqo-auth-form small {
+  margin: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.workspace-onboarding .workspace-progress {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.8;
+  min-height: 40px;
+}
+.workspace-onboarding .notice.error {
+  margin: 0;
+  font-size: 12px;
+}
+.workspace-spinner {
+  animation: workspace-spin 1s linear infinite;
+}
+@keyframes workspace-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 480px) {
+  .servqo-result-page {
+    padding: 24px 16px;
+    gap: 24px;
+  }
+  .servqo-result-card {
+    padding: 28px 22px;
+    border-radius: 16px;
+  }
+  .servqo-result-card h1 {
+    font-size: clamp(24px, 7vw, 30px);
+  }
+  .servqo-result-icon {
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .servqo-result-card .servqo-signin {
+    min-height: 48px;
+    padding: 12px 14px;
+  }
+  .servqo-result-card p {
+    font-size: 13px;
+  }
+  .servqo-result-page .servqo-result-tagline {
+    text-align: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-spinner {
+    animation: none;
+  }
 }

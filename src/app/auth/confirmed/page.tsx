@@ -13,8 +13,12 @@ export default async function Confirmed({
   searchParams: Promise<{ status?: string; next?: string }>;
 }) {
   const params = await searchParams;
-  let state: "success" | "invalid" | "unavailable" =
-    params.status === "unavailable" ? "unavailable" : "invalid";
+  let state: "success" | "invalid" | "unavailable" | "signin" =
+    params.status === "unavailable"
+      ? "unavailable"
+      : params.status === "signin"
+        ? "signin"
+        : "invalid";
   if (!params.status) {
     try {
       const client = await supabase();

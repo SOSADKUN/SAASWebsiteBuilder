@@ -57,11 +57,22 @@ describe("email confirmation", () => {
   });
   it("supports PKCE confirmation codes", async () => {
     mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
-    const response = await POST(
-      postRequest("http://localhost:3000/auth/confirm?code=test-code"),
+    const response = await GET(
+      new NextRequest("http://localhost:3000/auth/confirm?code=test-code"),
     );
     expect(mocks.exchangeCodeForSession).toHaveBeenCalledWith("test-code");
     expect(response.headers.get("location")).toContain("/auth/confirmed?next=");
+  });
+  it("explains failed PKCE session completion without claiming the email is unverified", async () => {
+    mocks.exchangeCodeForSession.mockResolvedValue({
+      error: { code: "bad_code_verifier" },
+    });
+    const response = await GET(
+      new NextRequest("https://servqo.vercel.app/auth/confirm?code=test-code"),
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://servqo.vercel.app/auth/confirmed?status=signin",
+    );
   });
   it("handles expired or missing tokens without showing success", async () => {
     mocks.verifyOtp.mockResolvedValue({ error: { message: "expired" } });

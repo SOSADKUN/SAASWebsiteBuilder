@@ -2,7 +2,11 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
+import {
+  WorkspaceCreationError,
+  workspaceErrorMessage,
+} from "@/lib/workspace-errors";
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
@@ -76,10 +80,7 @@ export async function createBusiness(form: FormData) {
       .values({ userId: u.id, merchantId: merchant.id })
       .onConflictDoNothing()
       .returning();
-    if (!claims.length)
-      throw new Error(
-        "This account has already created a trial business. Open your existing workspace or contact support; creating another business does not restart the trial.",
-      );
+    if (!claims.length) throw new WorkspaceCreationError();
     await tx
       .insert(s.memberships)
       .values({ merchantId: merchant.id, userId: u.id });
@@ -105,6 +106,23 @@ export async function createBusiness(form: FormData) {
         .values({ merchantId: merchant.id, name: category, position });
   });
   redirect("/dashboard");
+}
+export async function createWorkspace(
+  _previous: { error: string },
+  form: FormData,
+): Promise<{ error: string }> {
+  try {
+    await createBusiness(form);
+    return { error: "" };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      error:
+        error instanceof z.ZodError
+          ? "Enter a business name and a valid website address using lowercase letters, numbers and single hyphens."
+          : workspaceErrorMessage(error),
+    };
+  }
 }
 export async function saveLayout(
   merchantId: string,
@@ -339,7 +357,7 @@ export async function updateBusiness(merchantId: string, form: FormData) {
     .parse(Object.fromEntries(form));
   await db()
     .update(s.merchants)
-    .set({ ...value, updatedAt: new Date() })
+    .set(value)
     .where(eq(s.merchants.id, merchantId));
   revalidatePath("/dashboard");
 }

@@ -5,10 +5,17 @@ export function AuthResult({
   state,
   next = "/dashboard",
 }: {
-  state: "email" | "success" | "invalid" | "unavailable";
+  state: "email" | "success" | "invalid" | "unavailable" | "signin";
   next?: string;
 }) {
   const content = {
+    signin: {
+      title: "Sign in to continue",
+      text: "We could not finish signing you in from this email link. Your email may already be confirmed. Try signing in with your email and password.",
+      note: "Automatic sign-in needs the same browser that started registration. If your email is still unconfirmed, request a fresh confirmation email.",
+      href: "/login",
+      action: "Continue to sign in",
+    },
     email: {
       title: "Check your inbox",
       text: "One more step! Open the confirmation email from SERVQO and click the activation link to finish creating your account.",

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { MailCheck } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Brand } from "@/components/brand";
 import { AuthSubmit } from "@/components/auth/auth-submit";
 import { AuthResult } from "@/components/auth/auth-result";
@@ -22,6 +23,13 @@ export default async function Verify({
   }>;
 }) {
   const params = await searchParams;
+  if (params.code && !params.token_hash) {
+    const query = new URLSearchParams({
+      code: params.code,
+      next: safeAuthDestination(params.next ?? null),
+    });
+    redirect(`/auth/confirm?${query}`);
+  }
   if (
     !(
       params.token_hash &&
