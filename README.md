@@ -1,4 +1,4 @@
-﻿# Bloom Builder · v0.1
+﻿# SERVQO · v0.1
 
 A multi-tenant website builder for independent cafés, built with Next.js App Router, React, strict TypeScript, Tailwind CSS, Supabase Auth/Storage/PostgreSQL, Drizzle, dnd-kit, Zod, and Lucide. This is a server-backed application: drafts, published layouts, products, media records, and demo entitlements live in PostgreSQL. There is no local-storage substitute for persistence.
 

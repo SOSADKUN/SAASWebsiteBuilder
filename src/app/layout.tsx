@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Bloom — Your business, beautifully online",
-  description: "A modular website builder for independent businesses.",
+  title: "SERVQO — Serve Smarter. Grow Better.",
+  applicationName: "SERVQO",
+  description:
+    "A thoughtful workspace for hospitality businesses. Build your website and your next great first impression with SERVQO.",
 };
 export default function RootLayout({
   children,

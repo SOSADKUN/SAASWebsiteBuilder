@@ -390,7 +390,7 @@ export function Dashboard({
                 <span>
                   Good things take a little care. Your next chapter starts here.
                 </span>
-                <span>Made with Bloom ✳</span>
+                <span>Made with SERVQO ✳</span>
               </div>
             </>
           )}
@@ -615,7 +615,7 @@ export function Dashboard({
                         aria-label={`Preview ${d.name}`}
                       >
                         <div className={`mini-design mini-${d.type}`}>
-                          <span className="mini-logo">bloom.</span>
+                          <span className="mini-logo">SERVQO</span>
                           {d.type === "header" ? (
                             <div className="mini-nav">
                               Our story　 Menu　 Visit us

@@ -374,7 +374,7 @@ export function Editor({
                 <i />
                 <i />
               </div>
-              <span>⌁ {business.slug}.bloom.site</span>
+              <span>⌁ /sites/{business.slug}</span>
               <ArrowUpRight size={12} />
             </div>
             <WebsiteRenderer

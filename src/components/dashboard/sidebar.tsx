@@ -25,6 +25,7 @@ import {
 } from "@/lib/dashboard-navigation";
 import type { MerchantCapability } from "@/lib/merchant-capabilities";
 import { signOut } from "@/server/actions";
+import { Brand } from "@/components/brand";
 type Outlet = { id: string; name: string };
 type Props = {
   businessName: string;
@@ -159,6 +160,7 @@ export function MerchantSidebar({
         className={`sidebar platform-sidebar ${open ? "open" : ""}`}
         aria-label="Merchant workspace"
       >
+        <Brand className="servqo-sidebar-brand" />
         <div className="merchant-identity">
           <div className="merchant-logo">
             {logoUrl ? <img src={logoUrl} alt="" /> : <Coffee size={23} />}
@@ -288,7 +290,7 @@ export function MerchantSidebar({
             </form>
           </div>
           <span className="platform-credit">
-            Powered by <b>bloom</b> <span>F&B WORKSPACE</span>
+            Powered by <b>SERVQO</b> <span>F&B WORKSPACE</span>
           </span>
         </footer>
       </aside>

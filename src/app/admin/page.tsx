@@ -14,7 +14,9 @@ export default async function AdminPage() {
   return (
     <main className="admin-page">
       <header>
-        <span className="brand-icon">b.</span>
+        <span className="brand-icon" aria-label="SERVQO">
+          S
+        </span>
         <h1>Platform administration</h1>
         <Link className="button compact" href="/dashboard">
           Merchant dashboard ↗
