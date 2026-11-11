@@ -5,7 +5,7 @@ export function workspaceTrace(operation = "workspace.create") {
   const started = performance.now();
   function log(
     stage: string,
-    outcome: "started" | "completed" | "failed",
+    outcome: "started" | "completed" | "failed" | "redirected",
     extra: Record<string, string | number> = {},
   ) {
     // Only server-generated IDs, static stage names, durations and allowlisted
@@ -33,6 +33,20 @@ export function workspaceTrace(operation = "workspace.create") {
         });
         return result;
       } catch (error) {
+        // Next.js redirects are thrown control-flow signals, not service
+        // failures. Do not log their digest: it can contain a destination URL.
+        if (
+          error &&
+          typeof error === "object" &&
+          "digest" in error &&
+          typeof error.digest === "string" &&
+          error.digest.startsWith("NEXT_REDIRECT;")
+        ) {
+          log(stage, "redirected", {
+            durationMs: Math.round(performance.now() - start),
+          });
+          throw error;
+        }
         log(stage, "failed", {
           durationMs: Math.round(performance.now() - start),
           errorCode: workspaceErrorCode(error),

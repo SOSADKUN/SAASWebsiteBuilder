@@ -2,6 +2,25 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { workspaceTrace } from "../src/lib/workspace-diagnostics";
 afterEach(() => vi.restoreAllMocks());
 describe("workspace timing diagnostics", () => {
+  it("identifies expected login redirects without exposing their URLs", async () => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    const trace = workspaceTrace("dashboard.load");
+    const redirect = {
+      digest: "NEXT_REDIRECT;replace;/login?private=value;307;",
+    };
+    await expect(
+      trace.step("authentication", async () => {
+        throw redirect;
+      }),
+    ).rejects.toBe(redirect);
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries[1]).toMatchObject({
+      stage: "authentication",
+      outcome: "redirected",
+    });
+    expect(JSON.stringify(entries)).not.toContain("private=value");
+    expect(entries.some((entry) => entry.outcome === "failed")).toBe(false);
+  });
   it("records stage timings and a correlation reference without logging results", async () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => {});
     const trace = workspaceTrace();

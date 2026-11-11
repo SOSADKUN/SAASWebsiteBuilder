@@ -12,14 +12,19 @@ import {
 } from "@/lib/merchant-capabilities";
 export async function dashboardData(requiredCapability?: MerchantCapability) {
   const trace = workspaceTrace("dashboard.load");
-  return trace.step("load", () => loadDashboardData(requiredCapability));
+  return trace.step("load", () => loadDashboardData(requiredCapability, trace));
 }
-async function loadDashboardData(requiredCapability?: MerchantCapability) {
-  const u = await user();
+async function loadDashboardData(
+  requiredCapability: MerchantCapability | undefined,
+  trace: ReturnType<typeof workspaceTrace>,
+) {
+  const u = await trace.step("authentication", () => user());
   const database = db();
-  const membership = await database.query.memberships.findFirst({
-    where: eq(s.memberships.userId, u.id),
-  });
+  const membership = await trace.step("membership", () =>
+    database.query.memberships.findFirst({
+      where: eq(s.memberships.userId, u.id),
+    }),
+  );
   if (!membership) return null;
   // The user and their membership were just validated above. Reuse that
   // server-loaded role instead of repeating Auth and the same membership read.
@@ -39,35 +44,49 @@ async function loadDashboardData(requiredCapability?: MerchantCapability) {
     catalog,
     prices,
   ] = await Promise.all([
-    database.query.merchants.findFirst({
-      where: eq(s.merchants.id, merchantId),
-    }),
-    database
-      .select()
-      .from(s.pages)
-      .where(eq(s.pages.merchantId, merchantId))
-      .orderBy(asc(s.pages.updatedAt)),
-    database
-      .select()
-      .from(s.products)
-      .where(eq(s.products.merchantId, merchantId))
-      .orderBy(asc(s.products.position)),
-    database
-      .select()
-      .from(s.categories)
-      .where(eq(s.categories.merchantId, merchantId))
-      .orderBy(asc(s.categories.position)),
-    database
-      .select()
-      .from(s.entitlements)
-      .where(eq(s.entitlements.merchantId, merchantId)),
-    database.select().from(s.media).where(eq(s.media.merchantId, merchantId)),
-    database.select().from(s.componentDefinitions),
-    database.select().from(s.storeProducts),
+    trace.step("business", () =>
+      database.query.merchants.findFirst({
+        where: eq(s.merchants.id, merchantId),
+      }),
+    ),
+    trace.step("pages", () =>
+      database
+        .select()
+        .from(s.pages)
+        .where(eq(s.pages.merchantId, merchantId))
+        .orderBy(asc(s.pages.updatedAt)),
+    ),
+    trace.step("products", () =>
+      database
+        .select()
+        .from(s.products)
+        .where(eq(s.products.merchantId, merchantId))
+        .orderBy(asc(s.products.position)),
+    ),
+    trace.step("categories", () =>
+      database
+        .select()
+        .from(s.categories)
+        .where(eq(s.categories.merchantId, merchantId))
+        .orderBy(asc(s.categories.position)),
+    ),
+    trace.step("entitlements", () =>
+      database
+        .select()
+        .from(s.entitlements)
+        .where(eq(s.entitlements.merchantId, merchantId)),
+    ),
+    trace.step("media", () =>
+      database.select().from(s.media).where(eq(s.media.merchantId, merchantId)),
+    ),
+    trace.step("catalog", () => database.select().from(s.componentDefinitions)),
+    trace.step("prices", () => database.select().from(s.storeProducts)),
   ]);
   if (!business) throw new Error("Business unavailable");
   return {
-    subscription: await subscriptionSnapshot(merchantId),
+    subscription: await trace.step("subscription", () =>
+      subscriptionSnapshot(merchantId),
+    ),
     business,
     pages,
     products,

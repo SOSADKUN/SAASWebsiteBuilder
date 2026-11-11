@@ -24,13 +24,20 @@ import {
   type Section,
 } from "@/lib/models";
 export async function signIn(form: FormData) {
-  const client = await supabase();
-  const { error } = await client.auth.signInWithPassword({
+  const trace = workspaceTrace("auth.signin");
+  const credentials = {
     email: z.email().parse(form.get("email")),
     password: z.string().min(8).parse(form.get("password")),
-  });
-  if (error)
+  };
+  const client = await trace.step("client", () => supabase());
+  const { error } = await trace.step("password_authentication", () =>
+    client.auth.signInWithPassword(credentials),
+  );
+  if (error) {
+    trace.fail(error);
     redirect("/login?error=Unable+to+sign+in.+Check+your+email+and+password.");
+  }
+  trace.finish();
   redirect("/dashboard");
 }
 export async function signUp(form: FormData) {

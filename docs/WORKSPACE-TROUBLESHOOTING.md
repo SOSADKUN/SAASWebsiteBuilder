@@ -38,6 +38,26 @@ In browser Developer Tools → Network, enable Preserve log, submit once, and in
 
 ## Error codes
 
+### Membership statement timeout (`57014`)
+
+A reported production failure reached PostgreSQL while selecting `merchant_users` by `user_id`. A subsequent read-only check using the local runtime credentials found the membership, valid `membership_user` and `membership_unique` indexes, an index scan taking 0.107 ms inside PostgreSQL, and no blocking or idle-in-transaction sessions at that moment. The runtime role bypasses RLS. This does not reproduce or explain the earlier production timeout, and does not establish that Vercel uses the same connection configuration.
+
+The configured pooler region is `ap-southeast-2` (Sydney). The reported Vercel request ran in `iad1` (Washington, D.C.). Region distance adds latency; it is not proof of the statement-timeout cause.
+
+While a request is still stuck, run this **read-only** query in Supabase SQL Editor, or inspect Database Connections. It deliberately excludes SQL text, user identities and connection strings:
+
+```sql
+SELECT pid, state, wait_event_type, wait_event,
+       pg_blocking_pids(pid) AS blocking_pids,
+       extract(epoch FROM (now() - xact_start))::integer AS transaction_seconds
+FROM pg_stat_activity
+WHERE datname = current_database()
+  AND pid <> pg_backend_pid()
+  AND (wait_event_type = 'Lock' OR state LIKE 'idle in transaction%');
+```
+
+Nonempty `blocking_pids` identifies a blocking chain to investigate. An empty result after the request ends cannot rule out an earlier lock. Check PostgreSQL logs at the precise failure time and database resource metrics too. Do not terminate sessions, change global timeouts, reset users or rerun migrations merely because this query timed out.
+
 | Code                                                        | Meaning                                                                                                                    |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `42P01`, `42703`                                            | Missing table/column in the deployment's actual database. Check Production project and migration state.                    |
