@@ -82,7 +82,7 @@ Sign-up supplies the complete `/auth/confirm` redirect URL. For the Confirm sign
 
 Do not append `/auth/confirm` a second time. The handler also supports PKCE `code` callbacks, exchanges the token for an SSR cookie session, and permits only local redirect destinations. Existing email delivery/SMTP configuration must be tested manually. Protected loaders/actions validate the Auth user server-side; merchant membership and administrator role checks remain in place. Never grant administrator privileges through user-editable metadata.
 
-After registration, `/signup/check-email` opens an accessible inbox reminder popup. Successful token/code verification redirects to `/auth/confirmed`, which validates the confirmed user through Supabase before showing activation success. Expired links and provider failures have dedicated messages; confirmation does not load merchant database records until the user continues to the workspace.
+After registration, `/signup/check-email` opens an accessible inbox reminder popup. Email links open `/auth/confirm`, which redirects to `/auth/verify` without consuming the token. Only the Activate account button submits a POST to `/auth/confirm` for verification. Successful token/code verification redirects to `/auth/confirmed`, which validates the confirmed user through Supabase before showing activation success. Expired links and provider failures have dedicated messages; confirmation does not load merchant database records until the user continues to the workspace.
 
 For local development on port 3000, use Site URL `http://localhost:3000` and allow `http://localhost:3000/auth/confirm`. If running a different port, set `NEXT_PUBLIC_APP_URL` to that local origin and allow its callback URL. Use `npm run dev` for local HTTP; production mode requires an HTTPS app origin. After changing the email template or redirect allowlist, register a test account or request a fresh email; old links retain their original destinations. Never share the full confirmation URL, token, or auth code in logs/screenshots.
 
@@ -120,3 +120,15 @@ Runtime database access stays in server-only Node modules. Images upload directl
 | Environment changed but app still uses old project | Redeploy after changing build-time public variables.                                                                                                                         |
 
 References: [Supabase Drizzle configuration](https://supabase.com/docs/guides/database/drizzle), [connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres), [Auth redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls), [Vercel function limits](https://vercel.com/docs/functions/limitations).
+
+## SERVQO production confirmation checklist
+
+For `https://servqo.vercel.app`, set Supabase Site URL to that exact origin and allow `https://servqo.vercel.app/auth/confirm` as a redirect URL. In Vercel Production, set `NEXT_PUBLIC_APP_URL=https://servqo.vercel.app`; remove any localhost value there and redeploy.
+
+For a production-only Confirm signup email, use this direct application link (not `ConfirmationURL`, which verifies at Supabase before showing the application page):
+
+```html
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Activate your SERVQO account</a>
+```
+
+The existing `RedirectTo` template above also works when its supplied application origin is correctly configured and allowlisted. Keep the Email provider and Confirm email enabled. Deploy the click-to-activate code before testing and request a fresh confirmation email. Existing emails retain their old destinations and may already be expired/used. No database migration or service-role API key is required.

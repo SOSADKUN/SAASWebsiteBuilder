@@ -7,8 +7,15 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ supabase: mocks.supabase }));
-import { GET } from "../src/app/auth/confirm/route";
+import { GET, POST } from "../src/app/auth/confirm/route";
 import Confirmed from "../src/app/auth/confirmed/page";
+function postRequest(value: string) {
+  const url = new URL(value);
+  return new NextRequest(url.origin + url.pathname, {
+    method: "POST",
+    body: new URLSearchParams(url.search),
+  });
+}
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.supabase.mockResolvedValue({
@@ -20,10 +27,21 @@ beforeEach(() => {
   });
 });
 describe("email confirmation", () => {
-  it("verifies the token and sends users to the activation page without leaking it", async () => {
-    mocks.verifyOtp.mockResolvedValue({ error: null });
+  it("opening an email link never consumes its token", async () => {
     const response = await GET(
       new NextRequest(
+        "https://servqo.vercel.app/auth/confirm?token_hash=test&type=email",
+      ),
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://servqo.vercel.app/auth/verify?token_hash=test&type=email",
+    );
+    expect(mocks.supabase).not.toHaveBeenCalled();
+  });
+  it("verifies the token and sends users to the activation page without leaking it", async () => {
+    mocks.verifyOtp.mockResolvedValue({ error: null });
+    const response = await POST(
+      postRequest(
         "http://localhost:3000/auth/confirm?token_hash=test-token&type=email&next=//external.example",
       ),
     );
@@ -39,8 +57,8 @@ describe("email confirmation", () => {
   });
   it("supports PKCE confirmation codes", async () => {
     mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
-    const response = await GET(
-      new NextRequest("http://localhost:3000/auth/confirm?code=test-code"),
+    const response = await POST(
+      postRequest("http://localhost:3000/auth/confirm?code=test-code"),
     );
     expect(mocks.exchangeCodeForSession).toHaveBeenCalledWith("test-code");
     expect(response.headers.get("location")).toContain("/auth/confirmed?next=");
@@ -48,8 +66,8 @@ describe("email confirmation", () => {
   it("handles expired or missing tokens without showing success", async () => {
     mocks.verifyOtp.mockResolvedValue({ error: { message: "expired" } });
     for (const query of ["?token_hash=test&type=email", ""]) {
-      const response = await GET(
-        new NextRequest(`http://localhost:3000/auth/confirm${query}`),
+      const response = await POST(
+        postRequest(`http://localhost:3000/auth/confirm${query}`),
       );
       expect(response.headers.get("location")).toBe(
         "http://localhost:3000/auth/confirmed?status=invalid",
@@ -58,8 +76,8 @@ describe("email confirmation", () => {
   });
   it("handles provider connection failures without exposing errors", async () => {
     mocks.supabase.mockRejectedValue(new Error("private configuration"));
-    const response = await GET(
-      new NextRequest("http://localhost:3000/auth/confirm?code=test"),
+    const response = await POST(
+      postRequest("http://localhost:3000/auth/confirm?code=test"),
     );
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/auth/confirmed?status=unavailable",
