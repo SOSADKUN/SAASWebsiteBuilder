@@ -1,0 +1,85 @@
+import "server-only";
+import { eq, and, asc } from "drizzle-orm";
+import { db } from "@/db";
+import * as s from "@/db/schema";
+import { user, authorize } from "@/lib/auth";
+export async function dashboardData() {
+  const u = await user();
+  const database = db();
+  const membership = await database.query.memberships.findFirst({
+    where: eq(s.memberships.userId, u.id),
+  });
+  if (!membership) return null;
+  await authorize(membership.merchantId);
+  const merchantId = membership.merchantId;
+  const [
+    business,
+    pages,
+    products,
+    categories,
+    entitlements,
+    media,
+    catalog,
+    prices,
+  ] = await Promise.all([
+    database.query.merchants.findFirst({
+      where: eq(s.merchants.id, merchantId),
+    }),
+    database
+      .select()
+      .from(s.pages)
+      .where(eq(s.pages.merchantId, merchantId))
+      .orderBy(asc(s.pages.updatedAt)),
+    database
+      .select()
+      .from(s.products)
+      .where(eq(s.products.merchantId, merchantId))
+      .orderBy(asc(s.products.position)),
+    database
+      .select()
+      .from(s.categories)
+      .where(eq(s.categories.merchantId, merchantId))
+      .orderBy(asc(s.categories.position)),
+    database
+      .select()
+      .from(s.entitlements)
+      .where(eq(s.entitlements.merchantId, merchantId)),
+    database.select().from(s.media).where(eq(s.media.merchantId, merchantId)),
+    database.select().from(s.componentDefinitions),
+    database.select().from(s.storeProducts),
+  ]);
+  if (!business) throw new Error("Business unavailable");
+  return {
+    business,
+    pages,
+    products,
+    categories,
+    unlocked: entitlements.map((e) => e.componentKey),
+    media,
+    catalog,
+    prices,
+    email: u.email ?? "",
+  };
+}
+export async function publicData(slug: string, path = "/") {
+  const database = db();
+  const business = await database.query.merchants.findFirst({
+    where: eq(s.merchants.slug, slug),
+  });
+  if (!business) return null;
+  const page = await database.query.pages.findFirst({
+    where: and(eq(s.pages.merchantId, business.id), eq(s.pages.path, path)),
+  });
+  if (!page?.published) return null;
+  const products = await database
+    .select()
+    .from(s.products)
+    .where(
+      and(
+        eq(s.products.merchantId, business.id),
+        eq(s.products.available, true),
+      ),
+    )
+    .orderBy(asc(s.products.position));
+  return { business, page, products };
+}
