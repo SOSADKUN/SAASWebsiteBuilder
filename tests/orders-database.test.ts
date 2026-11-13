@@ -152,6 +152,8 @@ describe("durable POS orders", () => {
         )
       ).rows,
     ).toHaveLength(1);
+    const next = await createPosOrder(merchant, input());
+    expect(next.number).toBe(results[0].number + 1);
   });
   it("rejects a changed bill using an already submitted request ID", async () => {
     const request = input();

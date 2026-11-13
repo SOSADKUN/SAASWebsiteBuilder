@@ -18,11 +18,13 @@ type Result =
   | { ok: false; error: string; code: string; reference: string };
 async function execute(
   operation: string,
-  run: () => Promise<{ orderId: string; number: number }>,
+  run: (
+    trace: ReturnType<typeof workspaceTrace>,
+  ) => Promise<{ orderId: string; number: number }>,
 ): Promise<Result> {
   const trace = workspaceTrace(operation);
   try {
-    return { ok: true, ...(await trace.step("transaction", run)) };
+    return { ok: true, ...(await trace.step("request", () => run(trace))) };
   } catch (error) {
     unstable_rethrow(error);
     let message =
@@ -59,7 +61,9 @@ async function execute(
   }
 }
 export async function placeOrder(merchantId: string, input: CreateOrderInput) {
-  return execute("pos.order.create", () => createPosOrder(merchantId, input));
+  return execute("pos.order.create", (trace) =>
+    createPosOrder(merchantId, input, trace),
+  );
 }
 export async function changeOrder(
   merchantId: string,

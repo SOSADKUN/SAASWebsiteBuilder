@@ -37,6 +37,34 @@ The migration command also reapplies the existing application/storage policies a
 
 Category Management was removed from the Maintenance menu. The old `/dashboard/maintenance/categories` URL redirects to Menu Management, where categories are still managed.
 
-## Verification
+## Investigating slow sends
+
+Order creation logs `pos.order.create` with one correlation reference and separate
+`authorization`, `subscription`, `database_transaction` and overall `request`
+durations. These logs contain no bill contents, credentials or customer IDs.
+Authorization includes session verification and the current merchant membership;
+database transaction timing includes pool acquisition, SQL, lock waits and commit.
+It does not include browser-to-server travel or proxy session refresh.
+
+Creation avoids three sequential SQL round trips: counter initialization and lock
+use one upsert, while item snapshots, the initial event and counter advancement
+use one parameterized statement. Permission, subscription, price, row-lock,
+idempotency and rollback checks are retained. No schema migration is needed.
+
+Check Vercel Project Settings → Functions → Function Region against the production
+Supabase project's database region. Place the function near the database; do not
+choose a region just because it is near the browser. The local connection was
+observed in Sydney (`ap-southeast-2`, Vercel `syd1`); the production settings have
+not been verified. Region changes require a new deployment. See
+[Vercel region configuration](https://vercel.com/docs/functions/configuring-functions/region).
+
+`npm.cmd run dashboard:diagnose` measures synthetic, read-only queries from the
+machine running it, not from Vercel. On November 13, 2026, the configured local
+probe measured about 460–490 ms for warm first-wave reads and about 2.07 s for
+the initial connection/read. These are client-observed times, not PostgreSQL
+execution times or production POS benchmarks. Correlate production timings before
+attributing delays to Supabase compute or changing plans.
+
+## Regression coverage
 
 Regression tests exercise real migrated PostgreSQL for atomic creation, idempotent retries, price/availability validation, subscription enforcement, snapshot preservation, stale updates, cancellation acknowledgements, tenant RLS, browser write denial and immutable events. Endpoint tests cover session expiry, permission failures and no-store responses. A two-context browser test uses the real service with an isolated PostgreSQL database and simulated authentication; it does not verify a production Supabase account's session settings.

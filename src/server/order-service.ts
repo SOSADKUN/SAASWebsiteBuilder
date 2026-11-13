@@ -14,12 +14,16 @@ import {
   type OperationsSnapshot,
 } from "@/lib/order-policy";
 import { z } from "zod";
+import { workspaceTrace } from "@/lib/workspace-diagnostics";
 
 export async function createPosOrder(
   merchantId: string,
   input: CreateOrderInput,
+  trace = workspaceTrace("pos.order.create"),
 ) {
-  const actor = await authorize(z.uuid().parse(merchantId), "pos:operate");
+  const actor = await trace.step("authorization", () =>
+    authorize(z.uuid().parse(merchantId), "pos:operate"),
+  );
   const value = createOrderSchema.parse(input);
   const fingerprint = createHash("sha256")
     .update(
@@ -31,124 +35,131 @@ export async function createPosOrder(
       }),
     )
     .digest("hex");
-  await requireSubscription(merchantId);
-  return db().transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout','10000',true),set_config('lock_timeout','5000',true)`,
-    );
-    await tx
-      .insert(s.orderCounters)
-      .values({ merchantId })
-      .onConflictDoNothing();
-    // Serializes ticket numbers and duplicate submissions for this merchant.
-    const [counter] = await tx
-      .select()
-      .from(s.orderCounters)
-      .where(eq(s.orderCounters.merchantId, merchantId))
-      .for("update");
-    const [existing] = await tx
-      .select()
-      .from(s.orders)
-      .where(
-        and(
-          eq(s.orders.merchantId, merchantId),
-          eq(s.orders.requestId, value.requestId),
-        ),
+  await trace.step("subscription", () => requireSubscription(merchantId));
+  return trace.step("database_transaction", () =>
+    db().transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('statement_timeout','10000',true),set_config('lock_timeout','5000',true)`,
       );
-    if (existing) {
-      if (existing.fingerprint !== fingerprint)
-        throw new OrderError(
-          "REQUEST_REUSED",
-          "This bill was already submitted with different details. Check the recent orders before starting a new bill.",
-        );
-      return { orderId: existing.id, number: existing.number };
-    }
-    const products = await tx
-      .select()
-      .from(s.products)
-      .where(
-        and(
-          eq(s.products.merchantId, merchantId),
-          eq(s.products.available, true),
-          inArray(
-            s.products.id,
-            value.items.map((item) => item.productId),
+      // The no-op upsert also takes the merchant's row lock and returns its
+      // current counter, avoiding a separate INSERT followed by SELECT FOR UPDATE.
+      const [counter] = await tx
+        .insert(s.orderCounters)
+        .values({ merchantId })
+        .onConflictDoUpdate({
+          target: s.orderCounters.merchantId,
+          set: { lastNumber: sql`${s.orderCounters.lastNumber}` },
+        })
+        .returning();
+      const [existing] = await tx
+        .select()
+        .from(s.orders)
+        .where(
+          and(
+            eq(s.orders.merchantId, merchantId),
+            eq(s.orders.requestId, value.requestId),
           ),
-        ),
-      )
-      .for("share");
-    if (products.length !== value.items.length)
-      throw new OrderError(
-        "MENU_CHANGED",
-        "A product is unavailable or was removed. Refresh the menu and review your bill.",
-      );
-    const items = value.items.map((item) => {
-      const product = products.find(
-        (product) => product.id === item.productId,
-      )!;
-      if (product.price !== item.expectedPrice)
+        );
+      if (existing) {
+        if (existing.fingerprint !== fingerprint)
+          throw new OrderError(
+            "REQUEST_REUSED",
+            "This bill was already submitted with different details. Check the recent orders before starting a new bill.",
+          );
+        return { orderId: existing.id, number: existing.number };
+      }
+      const products = await tx
+        .select()
+        .from(s.products)
+        .where(
+          and(
+            eq(s.products.merchantId, merchantId),
+            eq(s.products.available, true),
+            inArray(
+              s.products.id,
+              value.items.map((item) => item.productId),
+            ),
+          ),
+        )
+        .for("share");
+      if (products.length !== value.items.length)
         throw new OrderError(
           "MENU_CHANGED",
-          "A menu price changed. Review the current prices before submitting again.",
+          "A product is unavailable or was removed. Refresh the menu and review your bill.",
         );
-      return {
+      const items = value.items.map((item) => {
+        const product = products.find(
+          (product) => product.id === item.productId,
+        )!;
+        if (product.price !== item.expectedPrice)
+          throw new OrderError(
+            "MENU_CHANGED",
+            "A menu price changed. Review the current prices before submitting again.",
+          );
+        return {
+          merchantId,
+          productId: product.id,
+          name: product.name,
+          image: product.image,
+          unitPrice: product.price,
+          quantity: item.quantity,
+          lineTotal: product.price * item.quantity,
+        };
+      });
+      const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
+      if (total > 2000000000)
+        throw new OrderError(
+          "INVALID_TOTAL",
+          "This bill is too large. Split it into smaller orders.",
+        );
+      const cash =
+        value.payment === "cash" ? (value.cashReceived ?? total) : null;
+      if (cash !== null && cash < total)
+        throw new OrderError(
+          "INSUFFICIENT_CASH",
+          "Cash received must cover the order total.",
+        );
+      const number = counter.lastNumber + 1;
+      const [order] = await tx
+        .insert(s.orders)
+        .values({
+          merchantId,
+          number,
+          requestId: value.requestId,
+          fingerprint,
+          total,
+          fulfillment: value.fulfillment,
+          tableLabel: value.fulfillment === "dine_in" ? value.tableLabel : "",
+          note: value.note,
+          payment: value.payment,
+          cashReceived: cash,
+          changeDue: cash === null ? 0 : cash - total,
+          createdBy: actor.id,
+        })
+        .returning();
+      const insertItems = tx
+        .insert(s.orderItems)
+        .values(items.map((item) => ({ ...item, orderId: order.id })));
+      const insertEvent = tx.insert(s.orderEvents).values({
         merchantId,
-        productId: product.id,
-        name: product.name,
-        image: product.image,
-        unitPrice: product.price,
-        quantity: item.quantity,
-        lineTotal: product.price * item.quantity,
-      };
-    });
-    const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
-    if (total > 2000000000)
-      throw new OrderError(
-        "INVALID_TOTAL",
-        "This bill is too large. Split it into smaller orders.",
+        orderId: order.id,
+        version: 0,
+        kind: "created",
+        toStatus: "pending",
+        actorId: actor.id,
+      });
+      const updateCounter = tx
+        .update(s.orderCounters)
+        .set({ lastNumber: number })
+        .where(eq(s.orderCounters.merchantId, merchantId));
+      // One database round trip; all three writes remain atomic. The merchant
+      // counter lock stays held until commit, including for concurrent retries.
+      await tx.execute(
+        sql`WITH saved_items AS (${insertItems.getSQL()}), saved_event AS (${insertEvent.getSQL()}) ${updateCounter.getSQL()}`,
       );
-    const cash =
-      value.payment === "cash" ? (value.cashReceived ?? total) : null;
-    if (cash !== null && cash < total)
-      throw new OrderError(
-        "INSUFFICIENT_CASH",
-        "Cash received must cover the order total.",
-      );
-    const number = counter.lastNumber + 1;
-    const [order] = await tx
-      .insert(s.orders)
-      .values({
-        merchantId,
-        number,
-        requestId: value.requestId,
-        fingerprint,
-        total,
-        fulfillment: value.fulfillment,
-        tableLabel: value.fulfillment === "dine_in" ? value.tableLabel : "",
-        note: value.note,
-        payment: value.payment,
-        cashReceived: cash,
-        changeDue: cash === null ? 0 : cash - total,
-        createdBy: actor.id,
-      })
-      .returning();
-    await tx
-      .insert(s.orderItems)
-      .values(items.map((item) => ({ ...item, orderId: order.id })));
-    await tx.insert(s.orderEvents).values({
-      merchantId,
-      orderId: order.id,
-      version: 0,
-      kind: "created",
-      toStatus: "pending",
-      actorId: actor.id,
-    });
-    await tx
-      .update(s.orderCounters)
-      .set({ lastNumber: number })
-      .where(eq(s.orderCounters.merchantId, merchantId));
-    return { orderId: order.id, number };
-  });
+      return { orderId: order.id, number };
+    }),
+  );
 }
 
 export async function changePosOrder(
