@@ -2,6 +2,32 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { workspaceTrace } from "../src/lib/workspace-diagnostics";
 afterEach(() => vi.restoreAllMocks());
 describe("workspace timing diagnostics", () => {
+  it.each([
+    ["canceling statement due to statement timeout", "statement_timeout"],
+    ["canceling statement due to user request", "cancel_request"],
+    ["canceling statement due to conflict with recovery", "recovery_conflict"],
+    ["private SQL and credentials", "unclassified"],
+  ])("classifies query cancellation safely: %s", async (message, reason) => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    const trace = workspaceTrace("dashboard.load");
+    const error = { cause: { code: "57014", message } };
+    await expect(
+      trace.step("membership", async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
+    trace.fail(error);
+    const entries = log.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries[1]).toMatchObject({
+      errorCode: "57014",
+      cancellationReason: reason,
+    });
+    expect(entries[2]).toMatchObject({
+      errorCode: "57014",
+      cancellationReason: reason,
+    });
+    expect(JSON.stringify(entries)).not.toContain(message);
+  });
   it("distinguishes onboarding from an existing dashboard without tenant data", () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => {});
     const trace = workspaceTrace("dashboard.load");

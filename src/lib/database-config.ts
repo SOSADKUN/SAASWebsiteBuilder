@@ -41,9 +41,16 @@ export function databaseOptions(connectionUrl: string, migration = false) {
   const supabase =
     url.hostname.endsWith(".pooler.supabase.com") ||
     /^db\.[a-z0-9]+\.supabase\.co$/.test(url.hostname);
+  const supabaseTransactionPooler =
+    url.hostname.endsWith(".pooler.supabase.com") && url.port === "6543";
   return {
     prepare: false,
     max: migration ? 1 : 3,
+    // Supavisor transaction pooling can drop replies when extended queries
+    // overlap on one socket. Keep parallelism across the pool, but wait for a
+    // query to finish before sending the next on that same connection.
+    // https://github.com/porsager/postgres#connection-poolers
+    max_pipeline: supabaseTransactionPooler ? 1 : 100,
     idle_timeout: 20,
     connect_timeout: 10,
     // Bound both pool starvation and stalled SQL at the driver, which cancels

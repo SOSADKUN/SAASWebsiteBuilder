@@ -58,6 +58,32 @@ export function dashboardErrorMessage(error: unknown) {
     return "The workspace database did not respond in time. Please try again. If this continues, contact support.";
   return "We could not load your workspace. Please try again. If this continues, contact support with the reference below. Your business data has been preserved.";
 }
+export function workspaceCancellationReason(error: unknown) {
+  // Match only standard PostgreSQL messages and emit static labels. Never
+  // return raw messages: Drizzle errors may contain SQL and private parameters.
+  let current = error;
+  for (
+    let depth = 0;
+    depth < 5 && current && typeof current === "object";
+    depth++
+  ) {
+    const item = current as {
+      code?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+    if (item.code === "57014") {
+      if (item.message === "canceling statement due to statement timeout")
+        return "statement_timeout";
+      if (item.message === "canceling statement due to user request")
+        return "cancel_request";
+      if (item.message === "canceling statement due to conflict with recovery")
+        return "recovery_conflict";
+    }
+    current = item.cause;
+  }
+  return "unclassified";
+}
 export function workspaceErrorMessage(error: unknown) {
   if (error instanceof WorkspaceCreationError) return error.message;
   let current = error;

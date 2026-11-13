@@ -19,6 +19,7 @@
     "env:check": "tsx scripts/check-environment.ts",
     "db:check": "tsx scripts/check-database.ts",
     "workspace:diagnose": "tsx scripts/diagnose-workspace.ts",
+    "dashboard:diagnose": "tsx scripts/diagnose-dashboard.ts",
     "format": "prettier --write src scripts tests *.ts *.mjs *.json README.md supabase"
   },
   "dependencies": {

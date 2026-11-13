@@ -2,7 +2,10 @@ import "./load-env";
 import postgres from "postgres";
 import { databaseOptions, getDatabaseUrl } from "../src/lib/database-config";
 import { getSupabaseConfiguration } from "../src/lib/supabase-config";
-import { workspaceErrorCode } from "../src/lib/workspace-errors";
+import {
+  workspaceErrorCode,
+  workspaceCancellationReason,
+} from "../src/lib/workspace-errors";
 const ms = (start: number) => Math.round(performance.now() - start);
 async function databaseCheck(label: string, url: string) {
   const client = postgres(url, databaseOptions(url, true));
@@ -13,6 +16,13 @@ async function databaseCheck(label: string, url: string) {
       const queryStart = performance.now();
       await sql`SELECT 1`;
       const roundTripMs = ms(queryStart);
+      const [settings] =
+        await sql`SELECT current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout`;
+      const membershipStart = performance.now();
+      // Exercise an indexed membership lookup without reading any customer's
+      // membership, email or business. Results are intentionally discarded.
+      await sql`SELECT 1 FROM public.merchant_users WHERE user_id='00000000-0000-4000-8000-000000000000'::uuid LIMIT 1`;
+      const membershipReadMs = ms(membershipStart);
       const schema =
         await sql`SELECT to_regclass('public.merchant_subscriptions') IS NOT NULL AND to_regclass('public.merchant_trial_claims') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='merchants' AND column_name='trial_ends_at') AS ready`;
       const locks =
@@ -20,6 +30,9 @@ async function databaseCheck(label: string, url: string) {
       return {
         connectedMs,
         roundTripMs,
+        statementTimeout: settings.statement_timeout,
+        lockTimeout: settings.lock_timeout,
+        membershipReadMs,
         schemaReady: schema[0].ready,
         lockWaiters: locks[0].waiting,
       };
@@ -32,6 +45,7 @@ async function databaseCheck(label: string, url: string) {
       JSON.stringify({
         check: label,
         errorCode: workspaceErrorCode(error),
+        cancellationReason: workspaceCancellationReason(error),
         totalMs: ms(start),
       }),
     );

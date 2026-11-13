@@ -1,4 +1,7 @@
-import { workspaceErrorCode } from "./workspace-errors";
+import {
+  workspaceErrorCode,
+  workspaceCancellationReason,
+} from "./workspace-errors";
 
 export function workspaceTrace(operation = "workspace.create") {
   const reference = crypto.randomUUID();
@@ -50,6 +53,7 @@ export function workspaceTrace(operation = "workspace.create") {
         log(stage, "failed", {
           durationMs: Math.round(performance.now() - start),
           errorCode: workspaceErrorCode(error),
+          cancellationReason: workspaceCancellationReason(error),
         });
         throw error;
       }
@@ -58,6 +62,9 @@ export function workspaceTrace(operation = "workspace.create") {
     ready: (destination: "onboarding" | "dashboard") =>
       log(`${destination}_ready`, "completed"),
     fail: (error: unknown) =>
-      log("request", "failed", { errorCode: workspaceErrorCode(error) }),
+      log("request", "failed", {
+        errorCode: workspaceErrorCode(error),
+        cancellationReason: workspaceCancellationReason(error),
+      }),
   };
 }
