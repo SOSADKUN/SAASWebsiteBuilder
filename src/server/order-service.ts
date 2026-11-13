@@ -199,7 +199,7 @@ export async function changePosOrder(
     if (!canChangeOrder(order.status, value.status))
       throw new OrderError(
         "INVALID_TRANSITION",
-        "This status change is no longer available. Completed or cancelled orders cannot be reopened.",
+        "This status change is no longer available. Only pending orders can be cancelled; completed or cancelled orders cannot be reopened.",
       );
     const [updated] = await tx
       .update(s.orders)

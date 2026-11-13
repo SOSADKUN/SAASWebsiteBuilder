@@ -53,8 +53,7 @@ export const orderChangeSchema = z.object({
 });
 export function canChangeOrder(from: OrderStatus, to: OrderStatus) {
   return (
-    nextOrderStatus[from] === to ||
-    (to === "cancelled" && ["pending", "preparing", "ready"].includes(from))
+    nextOrderStatus[from] === to || (to === "cancelled" && from === "pending")
   );
 }
 export function formatMoney(cents: number) {

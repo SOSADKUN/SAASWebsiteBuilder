@@ -254,45 +254,62 @@ describe("durable POS orders", () => {
         reason: "Duplicate order",
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
+    for (const status of ["preparing", "ready"] as const) {
+      await expect(
+        changePosOrder(merchant, {
+          orderId: order.orderId,
+          version: status === "preparing" ? 1 : 2,
+          status: "cancelled",
+          reason: "Too late to cancel",
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+      if (status === "preparing")
+        await changePosOrder(merchant, {
+          orderId: order.orderId,
+          version: 1,
+          status: "ready",
+          reason: "",
+        });
+    }
+    const cancelled = await createPosOrder(merchant, input());
     await changePosOrder(merchant, {
-      orderId: order.orderId,
-      version: 1,
+      orderId: cancelled.orderId,
+      version: 0,
       status: "cancelled",
       reason: "Customer cancelled",
     });
     await expect(
       changePosOrder(merchant, {
-        orderId: order.orderId,
-        version: 1,
-        status: "ready",
+        orderId: cancelled.orderId,
+        version: 0,
+        status: "preparing",
         reason: "",
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     let ticket = (await operationsSnapshot(merchant)).orders.find(
-      (item) => item.id === order.orderId,
+      (item) => item.id === cancelled.orderId,
     )!;
     expect(ticket).toMatchObject({
       status: "cancelled",
       cancelReason: "Customer cancelled",
       cancellationAcknowledgedAt: null,
-      version: 2,
+      version: 1,
     });
     await acknowledgePosCancellation(merchant, {
-      orderId: order.orderId,
-      version: 2,
+      orderId: cancelled.orderId,
+      version: 1,
     });
     await acknowledgePosCancellation(merchant, {
-      orderId: order.orderId,
-      version: 2,
+      orderId: cancelled.orderId,
+      version: 1,
     });
     ticket = (await operationsSnapshot(merchant)).orders.find(
-      (item) => item.id === order.orderId,
+      (item) => item.id === cancelled.orderId,
     )!;
     expect(ticket.cancellationAcknowledgedAt).toBeTruthy();
-    expect(ticket.version).toBe(3);
+    expect(ticket.version).toBe(2);
     expect(ticket.events.map((item) => item.kind)).toEqual([
       "created",
-      "status_changed",
       "cancelled",
       "cancellation_acknowledged",
     ]);

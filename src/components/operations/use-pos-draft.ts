@@ -24,7 +24,7 @@ export type PosDraft = z.infer<typeof draftSchema>;
 const empty: PosDraft = {
   requestId: "",
   lines: [],
-  fulfillment: "dine_in",
+  fulfillment: "takeaway",
   tableLabel: "",
   note: "",
   payment: "cash",

@@ -54,11 +54,6 @@ export function CancelOrderDialog({
             {error}
           </p>
         )}
-        {order.status === "preparing" && (
-          <p className="ops-callout">
-            Preparation has started. Tell the kitchen immediately as well.
-          </p>
-        )}
         {order.payment === "cash" && (
           <p>Cash was recorded. This action does not issue a refund.</p>
         )}

@@ -10,13 +10,15 @@ import {
   CheckCircle2,
   Trash2,
   ReceiptText,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { DashboardData } from "@/components/dashboard/types";
 import { formatMoney, formatOrderNumber, type Order } from "@/lib/order-policy";
 import { placeOrder, changeOrder } from "@/server/order-actions";
 import { useOperations } from "./use-operations";
 import { usePosDraft } from "./use-pos-draft";
-import { SyncStatus } from "./sync-status";
+import { OperationsFrame } from "./operations-frame";
 import { OrderTicket } from "./order-ticket";
 import { CancelOrderDialog } from "./cancel-order-dialog";
 function CatalogImage({ src }: { src: string }) {
@@ -43,8 +45,23 @@ export function PosScreen({
   data: DashboardData;
   enabled: boolean;
 }) {
-  const sync = useOperations(data.business.id, true);
+  const recent = useRef<HTMLDivElement>(null);
+  const slider = useRef<HTMLDivElement>(null);
+  const [recentVisible, setRecentVisible] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const { draft, update, clear } = usePosDraft(data.business.id);
+  const sync = useOperations(
+    data.business.id,
+    true,
+    recentVisible || draft.uncertain,
+  );
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) =>
+      setRecentVisible(entry.isIntersecting),
+    );
+    if (recent.current) observer.observe(recent.current);
+    return () => observer.disconnect();
+  }, []);
   const [category, setCategory] = useState("all"),
     [search, setSearch] = useState(""),
     [error, setError] = useState(""),
@@ -152,13 +169,19 @@ export function PosScreen({
         quantity: line.quantity,
         expectedPrice: line.product!.price,
       })),
-      fulfillment: draft.fulfillment,
-      tableLabel: draft.tableLabel,
+      // Preserve an uncertain legacy bill exactly so retry keeps its fingerprint.
+      fulfillment: draft.uncertain ? draft.fulfillment : ("takeaway" as const),
+      tableLabel: draft.uncertain ? draft.tableLabel : "",
       note: draft.note,
       payment: draft.payment,
       ...(draft.payment === "cash" ? { cashReceived: cash } : {}),
     };
-    update((current) => ({ ...current, uncertain: true }));
+    update((current) => ({
+      ...current,
+      fulfillment: input.fulfillment,
+      tableLabel: input.tableLabel,
+      uncertain: true,
+    }));
     startTransition(async () => {
       try {
         const result = await placeOrder(data.business.id, input);
@@ -221,15 +244,7 @@ export function PosScreen({
       product.name.toLowerCase().includes(search.toLowerCase()),
   );
   return (
-    <section className="operations pos-screen">
-      <div className="ops-heading">
-        <div>
-          <span className="eyebrow">GOOD SERVICE STARTS HERE</span>
-          <h1>POS / Cashier</h1>
-          <p>Build the bill. Send it straight to the kitchen.</p>
-        </div>
-        <SyncStatus sync={sync} />
-      </div>
+    <OperationsFrame title="POS / Cashier" className="pos-screen" sync={sync}>
       {error && (
         <p className="ops-error" role="alert">
           {error}
@@ -356,39 +371,7 @@ export function PosScreen({
             </div>
           ) : (
             <>
-              <fieldset className="pos-bill__fields" disabled={locked}>
-                <div className="pos-fulfillment">
-                  {(["dine_in", "takeaway"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      className={draft.fulfillment === mode ? "active" : ""}
-                      aria-pressed={draft.fulfillment === mode}
-                      onClick={() =>
-                        update((current) => ({ ...current, fulfillment: mode }))
-                      }
-                    >
-                      {mode === "dine_in" ? "Dine-in" : "Takeaway"}
-                    </button>
-                  ))}
-                </div>
-                {draft.fulfillment === "dine_in" && (
-                  <label>
-                    Table / reference <span>Optional</span>
-                    <input
-                      value={draft.tableLabel}
-                      maxLength={40}
-                      placeholder="e.g. 04"
-                      onChange={(event) =>
-                        update((current) => ({
-                          ...current,
-                          tableLabel: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                )}
-              </fieldset>
+              <p className="pos-pickup">Counter pickup</p>
               <div className="pos-bill__lines">
                 {!lines.length ? (
                   <div className="ops-empty">
@@ -524,48 +507,82 @@ export function PosScreen({
                       ? "Retry / confirm this order"
                       : "Send order to kitchen"}
                 </button>
-                <small>
-                  Cash is recorded manually. No card payment is processed.
-                </small>
               </footer>
             </>
           )}
         </aside>
       </div>
-      <div className="ops-section-heading">
-        <div>
-          <h2>Recent tickets</h2>
-          <p>
-            Submitted tickets stay visible here. Cancel with a reason if a bill
-            was sent by mistake.
-          </p>
+      <div ref={recent} className="pos-recent-section">
+        <div className="ops-section-heading">
+          <h2>
+            Recent tickets <small>({sync.data.orders.length})</small>
+          </h2>
+          <div className="pos-ticket-controls">
+            {!showAll && (
+              <>
+                <button
+                  className="icon-button"
+                  aria-label="Previous tickets"
+                  onClick={() =>
+                    slider.current?.scrollBy({ left: -320, behavior: "smooth" })
+                  }
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Next tickets"
+                  onClick={() =>
+                    slider.current?.scrollBy({ left: 320, behavior: "smooth" })
+                  }
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
+            <button
+              className="button compact"
+              aria-expanded={showAll}
+              onClick={() => setShowAll(!showAll)}
+            >
+              {showAll ? "Show slider" : "Show all tickets"}
+            </button>
+          </div>
         </div>
-        <span>{sync.data.orders.length} tickets</span>
-      </div>
-      <div className="ops-recent">
-        {sync.data.orders
-          .slice()
-          .sort((a, b) => b.number - a.number)
-          .slice(0, 8)
-          .map((order) => (
-            <OrderTicket
-              key={order.id}
-              order={order}
-              mode="cashier"
-              busy={pending}
-              onCancel={(order) => {
-                setError("");
-                setCancelId(order.id);
-              }}
-            />
-          ))}
+        {showAll && (
+          <p className="ops-muted">
+            All active tickets and the latest 50 closed tickets. Updates refresh
+            while this section is on screen.
+          </p>
+        )}
+        <div
+          ref={slider}
+          className={showAll ? "ops-recent" : "pos-ticket-slider"}
+          aria-label="Recent tickets"
+        >
+          {sync.data.orders
+            .slice()
+            .sort((a, b) => b.number - a.number)
+            .map((order) => (
+              <OrderTicket
+                key={order.id}
+                order={order}
+                mode="cashier"
+                busy={pending || sync.status !== "live"}
+                onCancel={(order) => {
+                  setError("");
+                  setCancelId(order.id);
+                }}
+              />
+            ))}
+        </div>
       </div>
       {!sync.data.orders.length && sync.status === "live" && (
         <p className="ops-muted">
           Submitted orders will appear here and on the Orders screen.
         </p>
       )}
-      {cancelOrder && (
+      {cancelOrder?.status === "pending" && (
         <CancelOrderDialog
           order={cancelOrder}
           busy={pending}
@@ -574,6 +591,6 @@ export function PosScreen({
           onConfirm={(reason) => cancel(cancelOrder, reason)}
         />
       )}
-    </section>
+    </OperationsFrame>
   );
 }

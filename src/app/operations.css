@@ -3,6 +3,67 @@
   max-width: 1600px;
   margin: 0 auto;
 }
+.operations--fullscreen,
+.operations:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  margin: 0;
+  padding: 20px;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+.ops-heading-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ops-fullscreen {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.button.ops-fullscreen.ops-danger {
+  background: #b34c39;
+  border-color: #b34c39;
+  color: white;
+}
+.button.ops-fullscreen.ops-danger:hover {
+  background: #963d2d;
+}
+.pos-pickup {
+  padding: 10px 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pos-ticket-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pos-ticket-slider {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min(300px, 85vw);
+  align-items: start;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 12px;
+}
+.pos-ticket-slider > article {
+  scroll-snap-align: start;
+}
+.ops-section-heading h2 small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
 .ops-heading {
   display: flex;
   align-items: flex-start;
@@ -882,5 +943,85 @@
   }
   .pos-payment {
     grid-template-columns: 1fr;
+  }
+}
+/* Dense operational queue: keep every item and note readable, with less chrome. */
+.orders-screen .ops-heading {
+  margin-bottom: 12px;
+  align-items: center;
+}
+.orders-screen .ops-view-tabs {
+  margin-bottom: 12px;
+  padding: 3px;
+}
+.orders-screen .orders-board {
+  gap: 10px;
+}
+.orders-screen .orders-column {
+  border-radius: 6px;
+}
+.orders-screen .orders-column > header {
+  padding: 10px;
+}
+.orders-screen .orders-column__tickets {
+  padding: 6px;
+  gap: 6px;
+}
+.order-ticket--kitchen {
+  border-radius: 5px;
+  box-shadow: none;
+}
+.order-ticket--kitchen > header {
+  padding: 8px 9px 0;
+}
+.order-ticket--kitchen header strong {
+  font-size: 16px;
+}
+.order-ticket--kitchen header > div > span {
+  display: inline;
+  margin-left: 8px;
+}
+.order-ticket--kitchen .order-ticket__time {
+  padding: 5px 9px;
+}
+.order-ticket--kitchen > ul {
+  padding: 0 9px;
+}
+.order-ticket--kitchen > ul > li {
+  padding: 4px 0;
+  font-size: 12px;
+}
+.order-ticket--kitchen .order-ticket__note {
+  margin: 5px 9px;
+  padding: 5px 7px;
+}
+.order-ticket--kitchen .order-ticket__note b {
+  display: inline;
+  margin-right: 5px;
+}
+.order-ticket--kitchen > footer {
+  padding: 6px 9px;
+  margin-top: 5px;
+}
+.order-ticket--kitchen .order-ticket__history {
+  padding: 6px 9px;
+}
+@media (min-width: 1600px) {
+  .orders-screen .orders-column__tickets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+@media (max-width: 700px) {
+  .operations--fullscreen,
+  .operations:fullscreen {
+    padding: 12px;
+  }
+  .ops-heading-actions {
+    justify-content: flex-start;
+  }
+  .pos-recent-section .ops-section-heading {
+    flex-wrap: wrap;
   }
 }

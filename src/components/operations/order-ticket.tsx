@@ -30,7 +30,7 @@ export function OrderTicket({
   const next = nextOrderStatus[order.status];
   return (
     <article
-      className={`order-ticket order-ticket--${order.status}`}
+      className={`order-ticket order-ticket--${mode} order-ticket--${order.status}`}
       data-order-id={order.id}
     >
       <header>
@@ -103,7 +103,7 @@ export function OrderTicket({
               {actionLabels[next as keyof typeof actionLabels]}
             </button>
           )}
-          {mode === "cashier" && next && (
+          {mode === "cashier" && order.status === "pending" && (
             <button
               className="button compact ops-danger-text"
               disabled={busy}

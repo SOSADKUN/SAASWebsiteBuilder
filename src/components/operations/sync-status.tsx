@@ -12,7 +12,9 @@ export function SyncStatus({
         {sync.status === "live" ? <Wifi size={15} /> : <WifiOff size={15} />}
         <span>
           {sync.status === "live"
-            ? "Live · updates every few seconds"
+            ? sync.autoPoll
+              ? "Live - updates every few seconds"
+              : "Connected - scroll to tickets for updates"
             : sync.status === "connecting"
               ? "Connecting…"
               : sync.status === "paused"

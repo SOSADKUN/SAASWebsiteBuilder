@@ -9,7 +9,7 @@ import {
 import { nextOrderStatus, type Order } from "@/lib/order-policy";
 import { changeOrder, acknowledgeCancellation } from "@/server/order-actions";
 import { useOperations } from "./use-operations";
-import { SyncStatus } from "./sync-status";
+import { OperationsFrame } from "./operations-frame";
 import { OrderTicket } from "./order-ticket";
 export function OrdersScreen({
   merchantId,
@@ -78,15 +78,7 @@ export function OrdersScreen({
     },
   ] as const;
   return (
-    <section className="operations orders-screen">
-      <div className="ops-heading">
-        <div>
-          <span className="eyebrow">THE HEART OF YOUR SERVICE</span>
-          <h1>Orders</h1>
-          <p>One shared queue. Keep both devices open and connected.</p>
-        </div>
-        <SyncStatus sync={sync} />
-      </div>
+    <OperationsFrame title="Orders" className="orders-screen" sync={sync}>
       {error && (
         <p className="ops-error" role="alert">
           {error}
@@ -187,7 +179,6 @@ export function OrdersScreen({
                     <h2>{column.title}</h2>
                     <span>{tickets.length}</span>
                   </div>
-                  <p>{column.subtitle}</p>
                 </header>
                 <div className="orders-column__tickets">
                   {tickets.map((order) => (
@@ -217,6 +208,6 @@ export function OrdersScreen({
           })}
         </div>
       )}
-    </section>
+    </OperationsFrame>
   );
 }

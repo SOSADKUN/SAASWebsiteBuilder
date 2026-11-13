@@ -1,7 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { OperationsSnapshot } from "@/lib/order-policy";
-export function useOperations(merchantId: string, withMenu = false) {
+export function useOperations(
+  merchantId: string,
+  withMenu = false,
+  autoPoll = true,
+) {
   const [data, setData] = useState<OperationsSnapshot>({ orders: [] });
   const [status, setStatus] = useState<
     "connecting" | "live" | "offline" | "error" | "paused"
@@ -9,6 +13,11 @@ export function useOperations(merchantId: string, withMenu = false) {
   const [error, setError] = useState("");
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const refreshRef = useRef<() => void>(() => {});
+  const autoPollRef = useRef(autoPoll);
+  useEffect(() => {
+    autoPollRef.current = autoPoll;
+    if (autoPoll) refreshRef.current();
+  }, [autoPoll]);
   const refresh = useCallback(() => refreshRef.current(), []);
   useEffect(() => {
     let stopped = false,
@@ -79,15 +88,20 @@ export function useOperations(merchantId: string, withMenu = false) {
     };
     void poll();
     const timer = window.setInterval(() => {
-      void poll();
+      if (autoPollRef.current) void poll();
     }, 3000);
     const reconnect = () => {
+      // Online/offline changes always update connection safety. Background
+      // polling and focus refresh can wait until POS tickets are in view.
       void poll();
+    };
+    const focus = () => {
+      if (autoPollRef.current) void poll();
     };
     window.addEventListener("online", reconnect);
     window.addEventListener("offline", reconnect);
-    window.addEventListener("focus", reconnect);
-    document.addEventListener("visibilitychange", reconnect);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", focus);
     return () => {
       stopped = true;
       controller?.abort();
@@ -95,9 +109,9 @@ export function useOperations(merchantId: string, withMenu = false) {
       refreshRef.current = () => {};
       window.removeEventListener("online", reconnect);
       window.removeEventListener("offline", reconnect);
-      window.removeEventListener("focus", reconnect);
-      document.removeEventListener("visibilitychange", reconnect);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", focus);
     };
   }, [merchantId, withMenu]);
-  return { data, status, error, lastSynced, refresh };
+  return { data, status, error, lastSynced, refresh, autoPoll };
 }
