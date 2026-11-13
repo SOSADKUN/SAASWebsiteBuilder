@@ -58,6 +58,24 @@ async function asUser(role: string, id = userA) {
   await database.exec(`SET ROLE ${role}`);
 }
 describe("PostgreSQL migrations and tenant RLS", () => {
+  it("adds header version three idempotently while keeping old render metadata", async () => {
+    await asUser("postgres");
+    await database.exec(`INSERT INTO component_definitions(key,name,category) VALUES ('header-minimal','Minimal','header'),('header-centered','Centered','header'),('header-dark','Legacy dark','header');
+      INSERT INTO component_versions(component_key,version,schema) SELECT key,2,'{"type":"object"}'::jsonb FROM component_definitions WHERE category='header';`);
+    const migration = await readFile(
+      "drizzle/0004_header_layout_versions.sql",
+      "utf8",
+    );
+    await database.exec(migration);
+    await database.exec(migration);
+    const rows = await database.query<{ version: number; count: number }>(
+      "SELECT version,count(*)::int AS count FROM component_versions WHERE component_key LIKE 'header-%' GROUP BY version ORDER BY version",
+    );
+    expect(rows.rows).toEqual([
+      { version: 2, count: 3 },
+      { version: 3, count: 3 },
+    ]);
+  });
   it("isolates order tickets and blocks browser order writes", async () => {
     await asUser("postgres");
     const a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

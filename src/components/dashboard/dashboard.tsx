@@ -15,13 +15,9 @@ import {
   Files,
   UtensilsCrossed,
   ShoppingBag,
-  Boxes,
   Images,
   ArrowUpRight,
   Plus,
-  Search,
-  Check,
-  Lock,
   Menu,
   Sun,
   Moon,
@@ -38,11 +34,10 @@ import { OverviewStats } from "./overview-stats";
 import { DeleteMediaDialog } from "./delete-media-dialog";
 import { PosScreen } from "@/components/operations/pos-screen";
 import { OrdersScreen } from "@/components/operations/orders-screen";
-import { ComponentGallery } from "@/components/designs/component-gallery";
 import { Editor } from "@/components/editor/editor";
 import { WebsiteRenderer } from "@/components/website/registry";
-import { definitions, defaultSettings, applyDesign } from "@/lib/models";
-import { unlock, upload, updateBusiness, createPage } from "@/server/actions";
+import { definitions } from "@/lib/models";
+import { upload, updateBusiness, createPage } from "@/server/actions";
 
 export function Dashboard({
   data,
@@ -67,8 +62,6 @@ export function Dashboard({
     setPageId,
     workingLayouts,
     setWorkingLayouts,
-    designHistory,
-    setDesignHistory,
   } = useMerchantWorkspace();
   const [notice, setNotice] = useState("");
   const [deleteAsset, setDeleteAsset] = useState<Data["media"][number] | null>(
@@ -76,9 +69,6 @@ export function Dashboard({
   );
   const [deletedMedia, setDeletedMedia] = useState<string[]>([]);
   const [preview, setPreview] = useState(initialTab === "Preview / Publish");
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All components");
-  const [storePreview, setStorePreview] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const page = data.pages.find((p) => p.id === pageId) ?? data.pages[0];
   const workingSections = page ? (workingLayouts[page.id] ?? page.draft) : [];
@@ -145,26 +135,6 @@ export function Dashboard({
   const isEditor = tab === "Website Editor" || tab === "Preview / Publish";
   const currentNavigation = navigationForView(tab);
   const currentGroup = groupForView(tab);
-  function applyToWorkingPage(key: string) {
-    if (!page || !available.includes(key) || !unlocked.includes(key)) return;
-    setWorkingLayouts((previous) => ({
-      ...previous,
-      [page.id]: applyDesign(
-        previous[page.id] ?? page.draft,
-        key,
-        data.business.name,
-      ),
-    }));
-    setDesignHistory((previous) => ({
-      ...previous,
-      [page.id]: [
-        key,
-        ...(previous[page.id] ?? page.draft.map((s) => s.key)).filter(
-          (k) => k !== key,
-        ),
-      ],
-    }));
-  }
   return (
     <div className={`app-shell ${dark ? "dark" : ""}`}>
       <MerchantSidebar
@@ -363,14 +333,14 @@ export function Dashboard({
                   },
                   {
                     icon: ShoppingBag,
-                    label: "Browse components",
-                    text: "Find sections to add to your website.",
-                    action: "Browse the store",
-                    target: "Component Store",
+                    label: "Preview layouts",
+                    text: "Try section layouts before unlocking them.",
+                    action: "View layouts",
+                    target: "Website Editor",
                     color: "lavender",
                   },
                 ].map(({ icon: Icon, ...item }) => (
-                  <article className="step-card" key={item.target}>
+                  <article className="step-card" key={item.label}>
                     <span className={`step-icon ${item.color}`}>
                       <Icon size={22} />
                     </span>
@@ -399,6 +369,13 @@ export function Dashboard({
               products={data.products}
               unlocked={unlocked}
               available={available}
+              offers={catalog
+                .filter((d) => d.active)
+                .map((d) => ({
+                  key: d.key,
+                  price: Math.round(d.price * 100),
+                  premium: d.premium,
+                }))}
               sections={workingSections}
               onSectionsChange={(next) =>
                 setWorkingLayouts((previous) => ({
@@ -411,24 +388,6 @@ export function Dashboard({
               }
               media={data.media}
               onSaved={() => router.refresh()}
-            />
-          )}
-          {tab === "Design Gallery" && page && (
-            <ComponentGallery
-              business={data.business}
-              products={data.products}
-              sections={workingSections}
-              pages={data.pages}
-              pageId={page.id}
-              onPageChange={setPageId}
-              catalog={catalog}
-              unlocked={unlocked}
-              history={designHistory[page.id] ?? page.draft.map((s) => s.key)}
-              onApply={applyToWorkingPage}
-              onUnlock={async (key) => {
-                await unlock(data.business.id, key);
-                router.refresh();
-              }}
             />
           )}
           {tab === "Pages" && (
@@ -513,187 +472,6 @@ export function Dashboard({
                   </button>
                 </form>
               </div>
-            </>
-          )}
-          {(tab === "Component Store" || tab === "My Components") && (
-            <>
-              <PageHeading
-                eyebrow={
-                  tab === "Component Store"
-                    ? "A FRESH PERSPECTIVE"
-                    : "YOUR DESIGN COLLECTION"
-                }
-                title={
-                  tab === "Component Store"
-                    ? "Little details. Big possibilities."
-                    : "Made for your next idea."
-                }
-                description={
-                  tab === "Component Store"
-                    ? "Thoughtfully crafted sections to make your website feel like you."
-                    : "Your free and demo-unlocked components, ready to make your own."
-                }
-              />
-              {tab === "Component Store" && (
-                <div className="demo-banner">
-                  <span className="small-icon">✦</span>
-                  <div>
-                    <b>A little room to experiment</b>
-                    <p>
-                      This is a DEMO store. Unlock premium designs for free. No
-                      payment is collected.
-                    </p>
-                  </div>
-                  <span className="pill">DEMO MODE</span>
-                </div>
-              )}
-              <div className="store-toolbar">
-                <div className="store-tabs">
-                  {[
-                    "All components",
-                    "header",
-                    "hero",
-                    "menu",
-                    "gallery",
-                    "footer",
-                    "other",
-                    "themes",
-                  ].map((c) => (
-                    <button
-                      className={category === c ? "active" : ""}
-                      key={c}
-                      onClick={() => setCategory(c)}
-                    >
-                      {c === "All components"
-                        ? c
-                        : c === "other"
-                          ? "Other sections"
-                          : c === "themes"
-                            ? "Complete themes"
-                            : c.charAt(0).toUpperCase() + c.slice(1) + "s"}
-                    </button>
-                  ))}
-                </div>
-                <label className="search-field">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search components"
-                    placeholder="Find your style…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="store-grid">
-                {catalog
-                  .filter(
-                    (d) =>
-                      d.active &&
-                      (tab === "Component Store" ||
-                        !d.premium ||
-                        unlocked.includes(d.key)) &&
-                      (category === "All components" ||
-                        d.category === category ||
-                        (category === "other" &&
-                          ![
-                            "header",
-                            "hero",
-                            "menu",
-                            "gallery",
-                            "footer",
-                          ].includes(d.category))) &&
-                      d.name.toLowerCase().includes(search.toLowerCase()),
-                  )
-                  .map((d, i) => (
-                    <article className="store-card" key={d.key}>
-                      <button
-                        className={`component-thumbnail thumb-${i % 4}`}
-                        onClick={() => setStorePreview(d.key)}
-                        aria-label={`Preview ${d.name}`}
-                      >
-                        <div className={`mini-design mini-${d.type}`}>
-                          <span className="mini-logo">SERVQO</span>
-                          {d.type === "header" ? (
-                            <div className="mini-nav">
-                              Our story　 Menu　 Visit us
-                            </div>
-                          ) : (
-                            <>
-                              <h3>
-                                {d.type === "hero"
-                                  ? "A slower kind of morning."
-                                  : d.type === "menu"
-                                    ? "A little of what you love."
-                                    : d.name}
-                              </h3>
-                              <div className="mini-lines">
-                                <i />
-                                <i />
-                              </div>
-                              {["hero", "gallery", "menu"].includes(d.type) && (
-                                <div className="mini-photo" />
-                              )}
-                              <span className="mini-button" />
-                            </>
-                          )}
-                        </div>
-                        <span className="thumbnail-badge">
-                          {d.premium ? "PREMIUM" : "FREE"}
-                        </span>
-                      </button>
-                      <div className="store-card-body">
-                        <div>
-                          <span className="eyebrow">
-                            {d.category} · V{d.version}.0
-                          </span>
-                          <h3>{d.name}</h3>
-                          <p>{d.description}</p>
-                        </div>
-                        <div className="store-card-footer">
-                          <b>
-                            {d.premium ? `$${d.price.toFixed(0)}` : "Free"}
-                            {d.premium && <small>one-time · demo</small>}
-                          </b>
-                          <button
-                            className="button compact"
-                            disabled={pending}
-                            onClick={() => {
-                              if (!d.premium || unlocked.includes(d.key)) {
-                                setPageId(page?.id);
-                                applyToWorkingPage(d.key);
-                                navigate("Website Editor");
-                                setNotice(
-                                  "Design applied to your draft. Save or publish when you’re ready.",
-                                );
-                              } else
-                                run(
-                                  () => unlock(data.business.id, d.key),
-                                  "Demo component unlocked. You can now apply it in the editor.",
-                                );
-                            }}
-                          >
-                            {!d.premium || unlocked.includes(d.key) ? (
-                              <>
-                                <Check size={14} /> Use design
-                              </>
-                            ) : (
-                              <>
-                                <Lock size={13} /> Demo unlock
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-              </div>
-              {category === "themes" && (
-                <div className="empty-state">
-                  <Boxes size={30} />
-                  <h3>Complete themes are coming next.</h3>
-                  <p>For now, create your own look with individual sections.</p>
-                </div>
-              )}
             </>
           )}
           {tab === "POS / Cashier" && (
@@ -903,7 +681,7 @@ export function Dashboard({
           )}
         </main>
       </div>
-      {(preview || storePreview) && (
+      {preview && (
         <div className="modal-overlay">
           <div
             className="preview-modal"
@@ -912,11 +690,9 @@ export function Dashboard({
             aria-label="Website preview"
           >
             <div className="modal-heading">
-              <b>
-                {storePreview ? "Component preview" : "Draft website preview"}
-              </b>
+              <b>Draft website preview</b>
               <div>
-                {!storePreview && page?.published && (
+                {page?.published && (
                   <a
                     className="button compact"
                     href={`/sites/${data.business.slug}${page.path === "/" ? "" : page.path}`}
@@ -931,7 +707,6 @@ export function Dashboard({
                   aria-label="Close preview"
                   onClick={() => {
                     setPreview(false);
-                    setStorePreview(null);
                   }}
                 >
                   <X size={20} />
@@ -940,21 +715,7 @@ export function Dashboard({
             </div>
             <div className="modal-scroll">
               <WebsiteRenderer
-                sections={
-                  storePreview
-                    ? [
-                        {
-                          id: storePreview,
-                          key: storePreview,
-                          version: definitions.find(
-                            (d) => d.key === storePreview,
-                          )!.version,
-                          visible: true,
-                          settings: defaultSettings(storePreview),
-                        },
-                      ]
-                    : workingSections
-                }
+                sections={workingSections}
                 business={data.business}
                 products={data.products}
               />

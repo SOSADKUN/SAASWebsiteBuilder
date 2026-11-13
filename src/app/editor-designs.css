@@ -1,0 +1,161 @@
+.editor-design-picker {
+  position: relative;
+  min-width: 0;
+  font-size: 11px;
+}
+.editor-design-picker > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  list-style: none;
+  background: var(--surface);
+}
+.editor-design-picker > summary::-webkit-details-marker {
+  display: none;
+}
+.editor-design-picker > summary > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-design-options {
+  max-height: min(400px, calc(100dvh - 24px));
+  overflow-y: auto;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  width: 280px;
+  max-width: 75vw;
+  z-index: 30;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 35px #12281f26;
+}
+.properties-panel .editor-design-options {
+  left: auto;
+  right: 0;
+}
+.sections-panel .editor-design-options {
+  left: -25px;
+  width: calc(100% + 65px);
+  max-width: none;
+}
+.editor-design-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px;
+  border-radius: 5px;
+}
+.editor-design-option.selected {
+  background: var(--soft);
+}
+.editor-design-option > button:first-child {
+  flex: 1;
+  text-align: left;
+  padding: 8px 5px;
+  min-width: 0;
+}
+.editor-design-option b,
+.editor-design-option small {
+  display: block;
+  white-space: normal;
+  line-height: 1.4;
+}
+.editor-design-option small {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.editor-design-option .design-unlock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 9px 6px;
+  color: var(--green);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.section-row > .editor-design-picker {
+  grid-column: 2;
+  grid-row: 1;
+}
+.section-row .section-name {
+  display: none;
+}
+.sections-panel .section-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 26px 26px;
+  overflow: visible;
+}
+.editor-preview-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  background: #fff5e6;
+  border-bottom: 1px solid #ead2ad;
+  color: #785222;
+  font-size: 12px;
+}
+.design-unlock-dialog {
+  margin: auto;
+  width: 440px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  background: var(--surface);
+  color: var(--text);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.design-unlock-dialog::backdrop {
+  background: #172c2677;
+  backdrop-filter: blur(3px);
+}
+.design-unlock-dialog h2 {
+  font-size: 23px;
+  margin: 14px 0;
+}
+.design-unlock-dialog p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 14px 0;
+}
+.design-unlock-dialog .design-price {
+  font-size: 25px;
+  font-weight: 600;
+}
+.design-price span {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.design-unlock-dialog > div {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+.design-checkout-error {
+  color: #a64030;
+  overflow-wrap: anywhere;
+}
+.properties-panel label:has(> .editor-design-picker) {
+  display: block;
+}
+.properties-panel label > .editor-design-picker {
+  margin-top: 8px;
+}

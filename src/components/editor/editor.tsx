@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import { MediaPicker } from "./media-picker";
+import { DesignPicker, type DesignOffer } from "./design-picker";
+import { DesignUnlockDialog } from "./design-unlock-dialog";
 import {
   DndContext,
   closestCenter,
@@ -30,6 +32,7 @@ import {
   ChevronDown,
   ArrowUpRight,
   RotateCcw,
+  Lock,
 } from "lucide-react";
 import {
   defaultSettings,
@@ -41,7 +44,8 @@ import {
   type Product,
 } from "@/lib/models";
 import { WebsiteRenderer } from "@/components/website/registry";
-import { saveLayout, upload, restoreDraft } from "@/server/actions";
+import { upload, restoreDraft } from "@/server/actions";
+import { saveEditorLayout } from "@/server/design-actions";
 type Page = { id: string; title: string; draft: Section[]; revision: number };
 function SectionRow({
   section,
@@ -52,6 +56,8 @@ function SectionRow({
   onVariant,
   available,
   unlocked,
+  offers,
+  onUnlock,
 }: {
   section: Section;
   selected: boolean;
@@ -61,6 +67,8 @@ function SectionRow({
   onVariant: (key: string) => void;
   available: string[];
   unlocked: string[];
+  offers: DesignOffer[];
+  onUnlock: (key: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: section.id });
@@ -69,6 +77,7 @@ function SectionRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`section-row ${selected ? "selected" : ""} ${!section.visible ? "muted" : ""}`}
+      onClick={onSelect}
     >
       <button
         aria-label="Drag to reorder section"
@@ -78,28 +87,15 @@ function SectionRow({
       >
         <GripVertical size={15} />
       </button>
-      <select
-        className="section-variant"
-        aria-label={`Design variant for ${section.settings.title}`}
+      <DesignPicker
         value={section.key}
-        onChange={(e) => onVariant(e.target.value)}
-      >
-        {definitions
-          .filter(
-            (d) =>
-              d.type === definitions.find((d) => d.key === section.key)?.type,
-          )
-          .map((d) => (
-            <option
-              key={d.key}
-              value={d.key}
-              disabled={!available.includes(d.key) || !unlocked.includes(d.key)}
-            >
-              {d.name}
-              {!unlocked.includes(d.key) ? " · Locked" : ""}
-            </option>
-          ))}
-      </select>
+        available={available}
+        unlocked={unlocked}
+        offers={offers}
+        onChoose={onVariant}
+        onUnlock={onUnlock}
+      />
+
       <button className="section-name" onClick={onSelect}>
         {definitions.find((d) => d.key === section.key)?.name ?? section.key}
         <small>{definitions.find((d) => d.key === section.key)?.type}</small>
@@ -125,8 +121,9 @@ export function Editor({
   page,
   business,
   products,
-  unlocked,
+  unlocked: serverUnlocked,
   available,
+  offers,
   onSaved,
   sections,
   onSectionsChange: setSections,
@@ -137,11 +134,22 @@ export function Editor({
   products: Product[];
   unlocked: string[];
   available: string[];
+  offers: DesignOffer[];
   onSaved: () => void;
   sections: Section[];
   onSectionsChange: Dispatch<SetStateAction<Section[]>>;
   media: { id: string; url: string; name: string }[];
 }) {
+  const [verifiedUnlocks, setVerifiedUnlocks] = useState<string[]>([]);
+  const unlocked = [...serverUnlocked, ...verifiedUnlocks];
+  const [unlocking, setUnlocking] = useState<string | null>(null);
+  const blocked = [
+    ...new Set(
+      sections
+        .filter((s) => !unlocked.includes(s.key) || !available.includes(s.key))
+        .map((s) => s.key),
+    ),
+  ];
   const [saved, setSaved] = useState(page.draft);
   const [revision, setRevision] = useState(page.revision);
   const [selected, setSelected] = useState(
@@ -184,16 +192,28 @@ export function Editor({
       );
   }
   async function persist(publish: boolean) {
+    if (blocked.length) {
+      setMessage("Unlock or remove preview-only designs before saving.");
+      return;
+    }
+    if (publish && dirty) {
+      setMessage("Save your draft before publishing.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
-      const result = await saveLayout(
+      const result = await saveEditorLayout(
         business.id,
         page.id,
         sections,
         revision,
         publish,
       );
+      if (!result.ok) {
+        setMessage(`${result.error} Reference: ${result.reference}`);
+        return;
+      }
       setRevision(result.revision);
       setSaved(structuredClone(sections));
       setMessage(publish ? "Your website is live." : "Draft saved.");
@@ -238,14 +258,15 @@ export function Editor({
         <div>
           <button
             className="button compact"
-            disabled={busy}
+            disabled={busy || blocked.length > 0}
             onClick={() => persist(false)}
           >
             Save draft
           </button>
           <button
             className="button primary compact"
-            disabled={busy}
+            disabled={busy || blocked.length > 0 || dirty}
+            title={dirty ? "Save your draft before publishing" : undefined}
             onClick={() => persist(true)}
           >
             {busy ? "Saving…" : "Publish"} <ArrowUpRight size={14} />
@@ -256,6 +277,41 @@ export function Editor({
         <div role="status" className="editor-message">
           {message}
         </div>
+      )}
+      {blocked.length > 0 && (
+        <div className="editor-preview-warning" role="status">
+          <Lock size={16} />
+          <span>
+            Preview only: unlock the selected designs or remove them before
+            saving or publishing.
+          </span>
+          {blocked
+            .filter((key) => available.includes(key))
+            .map((key) => (
+              <button
+                className="button compact"
+                key={key}
+                onClick={() => setUnlocking(key)}
+              >
+                Unlock {definitions.find((d) => d.key === key)?.name}
+              </button>
+            ))}
+        </div>
+      )}
+      {unlocking && offers.find((o) => o.key === unlocking) && (
+        <DesignUnlockDialog
+          merchantId={business.id}
+          offer={offers.find((o) => o.key === unlocking)!}
+          onClose={() => setUnlocking(null)}
+          onUnlocked={(key) => {
+            setVerifiedUnlocks((previous) => [...previous, key]);
+            setUnlocking(null);
+            setMessage(
+              "Design unlocked for demo. No payment was collected. You can now save your draft.",
+            );
+            onSaved();
+          }}
+        />
       )}
       <div className="editor-workspace">
         <aside className="sections-panel">
@@ -282,6 +338,8 @@ export function Editor({
                   selected={section.id === selected}
                   available={available}
                   unlocked={unlocked}
+                  offers={offers}
+                  onUnlock={setUnlocking}
                   onVariant={(key) =>
                     setSections((current) =>
                       current.map((s) =>
@@ -312,9 +370,7 @@ export function Editor({
           {adding && (
             <div className="section-picker">
               {definitions
-                .filter(
-                  (d) => available.includes(d.key) && unlocked.includes(d.key),
-                )
+                .filter((d) => available.includes(d.key))
                 .map((d) => (
                   <button
                     key={d.key}
@@ -332,7 +388,11 @@ export function Editor({
                     }}
                   >
                     {d.name}
-                    <Plus size={13} />
+                    {!unlocked.includes(d.key) ? (
+                      <Lock size={13} />
+                    ) : (
+                      <Plus size={13} />
+                    )}
                   </button>
                 ))}
             </div>
@@ -407,40 +467,23 @@ export function Editor({
               </div>
               <label>
                 Design variant
-                <select
+                <DesignPicker
                   value={current.key}
-                  onChange={(e) =>
+                  available={available}
+                  unlocked={unlocked}
+                  offers={offers}
+                  onUnlock={setUnlocking}
+                  onChoose={(key) =>
                     setSections(
                       sections.map((s) =>
-                        s.id === selected
-                          ? switchVariant(s, e.target.value)
-                          : s,
+                        s.id === selected ? switchVariant(s, key) : s,
                       ),
                     )
                   }
-                >
-                  {definitions
-                    .filter(
-                      (d) =>
-                        d.type ===
-                        definitions.find((d) => d.key === current.key)?.type,
-                    )
-                    .map((d) => (
-                      <option
-                        key={d.key}
-                        value={d.key}
-                        disabled={
-                          !available.includes(d.key) ||
-                          !unlocked.includes(d.key)
-                        }
-                      >
-                        {d.name}
-                        {!unlocked.includes(d.key) ? " · Locked" : ""}
-                      </option>
-                    ))}
-                </select>
+                />
               </label>
-              {current.version === 1 && (
+              {current.version !==
+                definitions.find((d) => d.key === current.key)?.version && (
                 <button
                   className="button compact version-update"
                   onClick={() =>
@@ -451,7 +494,7 @@ export function Editor({
                     )
                   }
                 >
-                  Use updated design · v2
+                  Use updated layout
                 </button>
               )}
               <h4 className="property-divider">CONTENT</h4>

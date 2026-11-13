@@ -6,12 +6,9 @@ export type DashboardView =
   | "Orders"
   | "Website Settings"
   | "Website Editor"
-  | "Design Gallery"
   | "Pages"
   | "Media Library"
   | "Preview / Publish"
-  | "Component Store"
-  | "My Components"
   | "General Settings"
   | "Subscription & Billing";
 export type NavigationItem = {
@@ -89,13 +86,6 @@ export const navigationGroups: NavigationGroup[] = [
         requires: "website:manage",
       },
       {
-        id: "designs",
-        label: "Design Gallery",
-        view: "Design Gallery",
-        href: "/dashboard/designs",
-        requires: "website:manage",
-      },
-      {
         id: "pages",
         label: "Pages",
         view: "Pages",
@@ -115,28 +105,6 @@ export const navigationGroups: NavigationGroup[] = [
         view: "Preview / Publish",
         href: "/dashboard/website/publish",
         requires: "website:manage",
-      },
-    ],
-  },
-  {
-    id: "components",
-    label: "Component Store",
-    icon: "store",
-    children: [
-      {
-        id: "browse",
-        label: "Browse Components",
-        view: "Component Store",
-        href: "/dashboard/components/browse",
-        requires: "marketplace:use",
-      },
-      { id: "themes", label: "Complete Themes", comingSoon: true },
-      {
-        id: "purchases",
-        label: "My Purchases",
-        view: "My Components",
-        href: "/dashboard/components/purchases",
-        requires: "marketplace:use",
       },
     ],
   },

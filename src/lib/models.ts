@@ -46,7 +46,7 @@ export type Settings = z.infer<typeof settingsSchema>;
 export const sectionSchema = z.object({
   id: z.uuid(),
   key: z.string().max(80),
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   visible: z.boolean(),
   settings: settingsSchema,
 });
@@ -91,7 +91,7 @@ export type SectionCategory =
 const catalogEntries = [
   ["header-minimal", "Minimal", "header", false, 0],
   ["header-centered", "Centered", "header", true, 19],
-  ["header-dark", "Premium dark", "header", true, 24],
+  ["header-dark", "Masthead & navigation", "header", true, 24],
   ["hero-classic", "Classic portrait", "hero", false, 0],
   ["hero-full-image", "Full-width image", "hero", false, 0],
   ["hero-split", "Split image / text", "hero", true, 29],
@@ -114,9 +114,9 @@ const designDescriptions: Record<ComponentKey, string> = {
   "header-minimal":
     "A quiet wordmark, considered spacing, and navigation that stays out of the way.",
   "header-centered":
-    "A centered identity with the warmth of a neighborhood meeting place.",
+    "Centered branding with a separate navigation row underneath. Customize the colors independently.",
   "header-dark":
-    "Deep espresso tones, a generous wordmark, and an understated outlined link.",
+    "A two-level masthead with a prominent action and a separate navigation bar. Use your own brand colors.",
   "hero-classic":
     "An arched photograph and oversized serif type. A warm, familiar welcome.",
   "hero-full-image":
@@ -154,8 +154,8 @@ export type Definition = {
   key: ComponentKey;
   name: string;
   type: SectionCategory;
-  version: 2;
-  versions: readonly (1 | 2)[];
+  version: 2 | 3;
+  versions: readonly (1 | 2 | 3)[];
   schema: typeof settingsSchema;
   defaultSettings: () => Settings;
   preview: "render";
@@ -170,16 +170,19 @@ export const definitions: Definition[] = catalogEntries.map(
     type,
     premium,
     price,
-    version: 2,
-    versions: [
-      "hero-full-image",
-      "hero-editorial",
-      "about-classic",
-      "menu-featured",
-      "gallery-editorial",
-    ].includes(key)
-      ? [2]
-      : [1, 2],
+    version: type === "header" ? 3 : 2,
+    versions:
+      type === "header"
+        ? [1, 2, 3]
+        : [
+              "hero-full-image",
+              "hero-editorial",
+              "about-classic",
+              "menu-featured",
+              "gallery-editorial",
+            ].includes(key)
+          ? [2]
+          : [1, 2],
     schema: settingsSchema,
     defaultSettings: () => defaultSettings(key),
     preview: "render",
@@ -234,17 +237,13 @@ export function defaultSettings(key: string): Settings {
             : "A PLACE TO BELONG",
     typography: "editorial",
     background:
-      key === "header-dark"
-        ? "#203b30"
-        : type === "hero"
-          ? "#f1ece3"
-          : key === "footer-modern"
-            ? "#302a24"
-            : "#fbf9f4",
+      type === "hero"
+        ? "#f1ece3"
+        : key === "footer-modern"
+          ? "#302a24"
+          : "#fbf9f4",
     color:
-      key === "header-dark" ||
-      key === "footer-modern" ||
-      key === "hero-full-image"
+      key === "footer-modern" || key === "hero-full-image"
         ? "#fff9ed"
         : "#352b23",
     align: "left",
@@ -287,11 +286,12 @@ export function switchVariant(section: Section, key: string): Section {
       ...after,
       ...section.settings,
       background:
+        current?.type !== "header" &&
         section.settings.background === beforeBackground
           ? after.background
           : section.settings.background,
       color:
-        section.settings.color === beforeColor
+        current?.type !== "header" && section.settings.color === beforeColor
           ? after.color
           : section.settings.color,
     },
@@ -311,7 +311,7 @@ export function initialLayout(businessName = "Bloom Café"): Section[] {
   ].map((key) => ({
     id: crypto.randomUUID(),
     key,
-    version: 2,
+    version: definitions.find((d) => d.key === key)!.version,
     visible: true,
     settings: {
       ...defaultSettings(key),

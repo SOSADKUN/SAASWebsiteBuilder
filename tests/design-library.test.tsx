@@ -166,7 +166,14 @@ describe("versioned design library", () => {
       ).toBeGreaterThan(10000);
   });
   it("gives redesigned variants distinct markup", () => {
-    for (const category of ["hero", "about", "menu", "gallery", "footer"]) {
+    for (const category of [
+      "header",
+      "hero",
+      "about",
+      "menu",
+      "gallery",
+      "footer",
+    ]) {
       const html = definitions
         .filter((d) => d.type === category)
         .map((d) =>
@@ -188,5 +195,23 @@ describe("versioned design library", () => {
         );
       expect(new Set(html).size).toBe(html.length);
     }
+  });
+  it("separates header layouts from palette and preserves published version-two renderers", () => {
+    const header = initialLayout()[0];
+    for (const key of ["header-minimal", "header-centered", "header-dark"]) {
+      const next = switchVariant(header, key);
+      expect(next.version).toBe(3);
+      expect(next.settings.background).toBe(header.settings.background);
+      expect(next.settings.color).toBe(header.settings.color);
+      expect(defaultSettings(key).background).toBe(
+        defaultSettings("header-minimal").background,
+      );
+    }
+    expect(resolveComponent("header-centered", 2)).not.toBe(
+      resolveComponent("header-centered", 3),
+    );
+    expect(resolveComponent("header-dark", 2)).not.toBe(
+      resolveComponent("header-dark", 3),
+    );
   });
 });

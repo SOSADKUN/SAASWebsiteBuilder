@@ -2,6 +2,7 @@ import { admin } from "@/lib/auth";
 import { db } from "@/db";
 import { adminListing } from "@/server/actions";
 import { definitions } from "@/lib/models";
+import { Brand } from "@/components/brand";
 export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   await admin();
@@ -14,9 +15,7 @@ export default async function AdminPage() {
   return (
     <main className="admin-page">
       <header>
-        <span className="brand-icon" aria-label="SERVQO">
-          S
-        </span>
+        <Brand />
         <h1>Platform administration</h1>
         <Link className="button compact" href="/dashboard">
           Merchant dashboard ↗

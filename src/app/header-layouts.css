@@ -1,0 +1,113 @@
+.cafe-site .header-stacked-layout {
+  flex-direction: column;
+  gap: 0;
+  padding: 28px 6% 0;
+}
+.cafe-site .header-stacked-brand {
+  padding: 0 0 24px;
+  text-align: center;
+}
+.cafe-site .header-stacked-layout .site-brand {
+  justify-content: center;
+  font-size: clamp(32px, 4.5cqw, 55px);
+}
+.cafe-site .header-stacked-layout .site-desktop-nav {
+  width: 100%;
+  justify-content: center;
+  border-top: 1px solid currentColor;
+  padding: 14px 0;
+  gap: 40px;
+}
+.cafe-site .header-masthead-layout {
+  display: block;
+  padding: 0;
+}
+.cafe-site .header-masthead-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 30px 6%;
+}
+.cafe-site .header-masthead-top .site-brand {
+  font-size: clamp(32px, 4cqw, 50px);
+}
+.cafe-site .header-masthead-action {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 20px;
+  border: 1px solid currentColor;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.cafe-site .header-masthead-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  padding: 12px 6%;
+}
+.cafe-site .header-masthead-bottom > p {
+  font-size: 10px;
+  line-height: 1.5;
+  max-width: 45%;
+  margin: 0;
+  opacity: 0.75;
+}
+.cafe-site .header-masthead-bottom .site-desktop-nav {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 24px;
+}
+.cafe-site [data-category="header"][data-version="3"] .site-mobile-nav nav {
+  background: var(--section-background);
+  color: var(--section-color);
+}
+@container cafe (max-width:520px) {
+  .cafe-site .header-stacked-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 24px;
+  }
+  .cafe-site .header-stacked-brand {
+    padding: 0;
+  }
+  .cafe-site .header-stacked-layout .site-brand {
+    font-size: 32px;
+    justify-content: flex-start;
+  }
+  .cafe-site .header-stacked-layout .site-desktop-nav {
+    display: none;
+  }
+  .cafe-site .header-stacked-layout .site-mobile-nav {
+    position: relative;
+  }
+  .cafe-site .header-masthead-layout {
+    padding: 0;
+  }
+  .cafe-site .header-masthead-top {
+    padding: 22px;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+  .cafe-site .header-masthead-top .site-brand {
+    font-size: 32px;
+  }
+  .cafe-site .header-masthead-action {
+    font-size: 10px;
+    padding: 10px 14px;
+    gap: 12px;
+  }
+  .cafe-site .header-masthead-bottom {
+    padding: 6px 22px;
+    gap: 12px;
+  }
+  .cafe-site .header-masthead-bottom > p {
+    max-width: 75%;
+    font-size: 10px;
+  }
+}

@@ -12,6 +12,8 @@ import {
   HeaderMinimal,
   HeaderCentered,
   HeaderPremiumDark,
+  HeaderStacked,
+  HeaderMasthead,
 } from "./sections/headers";
 import {
   HeroClassic,
@@ -29,13 +31,26 @@ import { GalleryMasonry, GalleryEditorial } from "./sections/galleries";
 import { FooterMinimal, FooterColumns } from "./sections/footers";
 import { Ordering, Location, Contact } from "./sections/essentials";
 import { legacyRegistry } from "./legacy";
-export const componentRegistry = {
-  "header-minimal": { 1: legacyRegistry["header-minimal"], 2: HeaderMinimal },
+export const componentRegistry: Record<
+  ComponentKey,
+  Record<2, ComponentType<WebsiteSectionProps>> &
+    Partial<Record<1 | 3, ComponentType<WebsiteSectionProps>>>
+> = {
+  "header-minimal": {
+    1: legacyRegistry["header-minimal"],
+    2: HeaderMinimal,
+    3: HeaderMinimal,
+  },
   "header-centered": {
     1: legacyRegistry["header-centered"],
     2: HeaderCentered,
+    3: HeaderStacked,
   },
-  "header-dark": { 1: legacyRegistry["header-dark"], 2: HeaderPremiumDark },
+  "header-dark": {
+    1: legacyRegistry["header-dark"],
+    2: HeaderPremiumDark,
+    3: HeaderMasthead,
+  },
   "hero-classic": { 1: legacyRegistry["hero-classic"], 2: HeroClassic },
   "hero-full-image": { 2: HeroFullImage },
   "hero-split": { 1: legacyRegistry["hero-split"], 2: HeroSplit },
@@ -52,11 +67,7 @@ export const componentRegistry = {
   "ordering-cta": { 1: Ordering, 2: Ordering },
   "location-hours": { 1: Location, 2: Location },
   "contact-social": { 1: Contact, 2: Contact },
-} satisfies Record<
-  ComponentKey,
-  Record<2, ComponentType<WebsiteSectionProps>> &
-    Partial<Record<1, ComponentType<WebsiteSectionProps>>>
->;
+};
 export const sectionLibrary = definitions.map((definition) => ({
   ...definition,
   render: componentRegistry[definition.key][definition.version],
@@ -101,6 +112,8 @@ export function WebsiteRenderer({
             color: settings.color,
             textAlign: settings.align,
             "--section-space": `${settings.spacing}px`,
+            "--section-background": settings.background,
+            "--section-color": settings.color,
           } as CSSProperties;
           return (
             <section

@@ -5,18 +5,17 @@ The sidebar is configured in `src/lib/dashboard-navigation.ts`, rendered by `src
 | Module               | Implemented destinations                                                                                                                |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Overview             | `/dashboard`                                                                                                                            |
-| Maintenance          | `/dashboard/maintenance/menu`, `/dashboard/maintenance/categories`, `/dashboard/maintenance/business`                                   |
-| Café Website Builder | `/dashboard/website/editor`, `/dashboard/designs`, `/dashboard/website/pages`, `/dashboard/website/media`, `/dashboard/website/publish` |
-| Component Store      | `/dashboard/components/browse`, `/dashboard/components/purchases`                                                                       |
+| Maintenance          | `/dashboard/maintenance/menu`, `/dashboard/maintenance/business`                                   |
+| Café Website Builder | `/dashboard/website/editor`, `/dashboard/website/pages`, `/dashboard/website/media`, `/dashboard/website/publish` |
 | Settings             | `/dashboard/settings/general` (existing workspace appearance controls)                                                                  |
 
-The original `/dashboard` and `/dashboard/designs` entry points remain. Existing dashboard views are reused: category management uses the current menu/category manager; Business Information uses the existing business-settings form; Preview / Publish uses the current editor and preview modal. My Purchases displays the existing free/demo-unlocked collection. Complete Themes is disabled until implemented.
+The standalone Component Store and Design Gallery have been removed from navigation. Their old URLs redirect to `/dashboard/website/editor`; design preview and demo unlocking are available in editor dropdowns. The old category-management URL redirects to Menu Management.
 
-POS / Cashier, Orders, Employee Management, Table Management, Promotions, Complete Themes, Staff Permissions, Subscription & Billing, and Security are clearly labeled Coming Soon. No business operations or payment integrations were added.
+POS / Cashier, Orders and Subscription & Billing are implemented. Employee Management, Table Management, Promotions, Staff Permissions and Security remain Coming Soon. See [POS/Orders](POS-ORDERS.md) and [editor designs](EDITOR-DESIGNS.md).
 
 ## Routing and state
 
-`src/app/dashboard/[...module]/page.tsx` resolves only registered, implemented module URLs. New modules can replace individual branches with their own route/layout/server loaders later. The dedicated gallery route retains precedence.
+`src/app/dashboard/[...module]/page.tsx` resolves only registered, implemented module URLs. New modules can replace individual branches with their own route/layout/server loaders later. The dedicated legacy gallery route redirects to the editor.
 
 Normal sidebar clicks keep the current workspace mounted and update the URL using the browser history API. Modified clicks and opening links in another tab use normal deep links. Back/forward navigation restores the selected view. The shared dashboard layout/provider retains unsaved layouts, design history, selected page and appearance when route segments or server data refresh. None of this changes draft saving or publishing semantics.
 
@@ -30,9 +29,9 @@ The verified membership role supplies navigation capabilities on the server. Cur
 
 - Business name and configured homepage-header logo appear at the top; a café mark is the fallback.
 - The sidebar accepts optional real outlet data and a change handler. No outlet control is shown until those are supplied; there is no simulated outlet switch.
-- Groups collapse independently. The current destination and its parent group are highlighted; Design Gallery stays directly accessible inside the builder group.
+- Groups collapse independently. The current destination and its parent group are highlighted; design selection is available inside Website Editor.
 - Navigation scrolls independently of the identity and account footer.
 - The mobile drawer has a backdrop, close button, Escape handling, focus containment/return, and a hidden offscreen state that cannot receive keyboard focus.
 - General settings reuses the existing light/dark appearance state and links to business information.
 
-No schema changes or database migration are required.
+Navigation itself needs no migration. The version-three header registrations require the additive migration described in [editor designs](EDITOR-DESIGNS.md).

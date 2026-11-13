@@ -17,10 +17,17 @@ vi.mock("@/db", () => ({ db: mocks.db }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 import { saveLayout, adminListing, saveProduct } from "../src/server/actions";
+import type { Section } from "../src/lib/models";
 const merchantId = "11111111-1111-4111-8111-111111111111",
   pageId = "22222222-2222-4222-8222-222222222222";
 function repository(
-  options: { missing?: boolean; conflict?: boolean; premium?: boolean } = {},
+  options: {
+    missing?: boolean;
+    conflict?: boolean;
+    premium?: boolean;
+    draft?: Section[];
+    owned?: string[];
+  } = {},
 ) {
   const updated = vi.fn();
   const inserted = vi.fn();
@@ -37,13 +44,16 @@ function repository(
     }),
     query: {
       pages: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue(
-            options.missing
-              ? undefined
-              : { id: pageId, merchantId, revision: options.conflict ? 1 : 0 },
-          ),
+        findFirst: vi.fn().mockResolvedValue(
+          options.missing
+            ? undefined
+            : {
+                id: pageId,
+                merchantId,
+                revision: options.conflict ? 1 : 0,
+                draft: options.draft ?? [],
+              },
+        ),
       },
     },
     update: vi.fn().mockReturnValue({
@@ -59,7 +69,13 @@ function repository(
   tx.select.mockImplementation(() => {
     count++;
     if (count === 1) return { from: () => ({ where }) };
-    if (count === 2) return { from: () => ({ where: () => [] }) };
+    if (count === 2)
+      return {
+        from: () => ({
+          where: () =>
+            (options.owned ?? []).map((componentKey) => ({ componentKey })),
+        }),
+      };
     return { from: () => definitions.map((d) => ({ ...d, active: true })) };
   });
   const database = {
@@ -106,8 +122,8 @@ describe("tenant-authorized publishing", () => {
     expect(r.updated.mock.calls[0][0]).not.toHaveProperty("published");
   });
   it("publishes the validated layout and records a revision", async () => {
-    const r = repository();
     const sections = initialLayout();
+    const r = repository({ draft: sections });
     await saveLayout(merchantId, pageId, sections, 0, true);
     expect(r.updated).toHaveBeenCalledWith(
       expect.objectContaining({ published: sections, draft: sections }),
@@ -122,6 +138,60 @@ describe("tenant-authorized publishing", () => {
       saveLayout(merchantId, pageId, sections, 0, true),
     ).rejects.toThrow("Unlock");
     expect(r.updated).not.toHaveBeenCalled();
+  });
+  it("requires saving a draft before publishing changed content", async () => {
+    const sections = initialLayout();
+    const r = repository({ draft: structuredClone(sections) });
+    sections[0].settings.title = "Unsaved heading";
+    await expect(
+      saveLayout(merchantId, pageId, sections, 0, true),
+    ).rejects.toThrow("Save your draft");
+    expect(r.updated).not.toHaveBeenCalled();
+  });
+  it("publishes a saved draft despite PostgreSQL JSON object key ordering", async () => {
+    const sections = initialLayout();
+    const draft = sections.map((section) =>
+      Object.fromEntries(
+        Object.entries({
+          ...section,
+          settings: Object.fromEntries(
+            Object.entries(section.settings).reverse(),
+          ),
+        }).reverse(),
+      ),
+    ) as Section[];
+    repository({ draft });
+    await expect(
+      saveLayout(merchantId, pageId, sections, 0, true),
+    ).resolves.toEqual({ revision: 1 });
+  });
+  it("blocks locked designs from draft saving even when hidden", async () => {
+    const r = repository();
+    const sections = initialLayout();
+    sections[0] = { ...sections[0], key: "header-centered", visible: false };
+    await expect(
+      saveLayout(merchantId, pageId, sections, 0, false),
+    ).rejects.toThrow("Unlock");
+    expect(r.updated).not.toHaveBeenCalled();
+  });
+  it("allows saving an owned layout with custom colors", async () => {
+    const r = repository({ owned: ["header-centered"] });
+    const sections = initialLayout();
+    sections[0] = {
+      ...sections[0],
+      key: "header-centered",
+      settings: {
+        ...sections[0].settings,
+        background: "#123456",
+        color: "#ffffff",
+      },
+    };
+    await expect(
+      saveLayout(merchantId, pageId, sections, 0, false),
+    ).resolves.toEqual({ revision: 1 });
+    expect(r.updated).toHaveBeenCalledWith(
+      expect.objectContaining({ draft: sections }),
+    );
   });
   it("denies merchant access to admin listing mutations", async () => {
     mocks.admin.mockRejectedValue(new Error("Platform admin access required"));

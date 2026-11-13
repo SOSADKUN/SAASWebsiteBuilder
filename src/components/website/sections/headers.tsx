@@ -69,3 +69,36 @@ export function HeaderPremiumDark(props: Props) {
     </header>
   );
 }
+
+// New layouts use version 3 so existing saved/published v1/v2 headers keep
+// their original rendering until the merchant explicitly changes the design.
+export function HeaderStacked(props: Props) {
+  return (
+    <header className="site-header header-stacked-layout">
+      <div className="header-stacked-brand">
+        <Brand {...props} />
+      </div>
+      <Navigation {...props} />
+    </header>
+  );
+}
+export function HeaderMasthead(props: Props) {
+  const { settings: s } = props;
+  return (
+    <header className="site-header header-masthead-layout">
+      <div className="header-masthead-top">
+        <Brand {...props} />
+        {s.buttonText && (
+          <a className="header-masthead-action" href={s.buttonUrl}>
+            {s.buttonText}
+            <span aria-hidden="true">↗</span>
+          </a>
+        )}
+      </div>
+      <div className="header-masthead-bottom">
+        <p>{s.description}</p>
+        <Navigation {...props} />
+      </div>
+    </header>
+  );
+}

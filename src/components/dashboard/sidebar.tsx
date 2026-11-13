@@ -257,25 +257,6 @@ export function MerchantSidebar({
               );
             })}
           </nav>
-          {capabilities.includes("website:manage") && (
-            <div className="sidebar-builder-note">
-              <span>YOUR WEBSITE, YOUR WAY</span>
-              <p>A considered space for your business.</p>
-              <Link
-                href="/dashboard/designs"
-                prefetch={false}
-                onClick={(event) =>
-                  activate(event, {
-                    id: "designs",
-                    label: "Design Gallery",
-                    view: "Design Gallery",
-                  })
-                }
-              >
-                Explore the design library ↗
-              </Link>
-            </div>
-          )}
         </div>
         <footer className="platform-sidebar-footer">
           <button className="theme-toggle" onClick={onThemeToggle}>

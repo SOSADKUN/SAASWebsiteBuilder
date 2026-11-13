@@ -29,16 +29,28 @@ import {
 } from "@/lib/models";
 export async function signIn(form: FormData) {
   const trace = workspaceTrace("auth.signin");
-  const credentials = {
-    email: z.email().parse(form.get("email")),
-    password: z.string().min(8).parse(form.get("password")),
-  };
-  const client = await trace.step("client", () => supabase());
-  const { error } = await trace.step("password_authentication", () =>
-    client.auth.signInWithPassword(credentials),
-  );
-  if (error) {
+  const credentials = z
+    .object({ email: z.email(), password: z.string().min(8) })
+    .safeParse({ email: form.get("email"), password: form.get("password") });
+  if (!credentials.success)
+    redirect(
+      "/login?error=Enter+a+valid+email+and+a+password+of+at+least+8+characters.",
+    );
+  let failed = false;
+  try {
+    const client = await trace.step("client", () => supabase());
+    const { error } = await trace.step("password_authentication", () =>
+      client.auth.signInWithPassword(credentials.data),
+    );
+    if (error) {
+      trace.fail(error);
+      failed = true;
+    }
+  } catch (error) {
     trace.fail(error);
+    failed = true;
+  }
+  if (failed) {
     redirect("/login?error=Unable+to+sign+in.+Check+your+email+and+password.");
   }
   trace.finish();
@@ -203,6 +215,12 @@ export async function saveLayout(
       catalog.filter((d) => d.active).map((d) => d.key),
       catalog.filter((d) => d.premium).map((d) => d.key),
     );
+    if (
+      publish &&
+      JSON.stringify(layoutSchema.parse(page.draft)) !==
+        JSON.stringify(layoutSchema.parse(sections))
+    )
+      throw new Error("Save your draft before publishing.");
     await tx
       .update(s.pages)
       .set({
@@ -264,7 +282,7 @@ export async function unlock(merchantId: string, key: string) {
     .insert(s.entitlements)
     .values({ merchantId, componentKey: key, source: "demo" })
     .onConflictDoNothing();
-  revalidatePath("/dashboard");
+  revalidatePath("/dashboard", "layout");
 }
 const productSchema = z.object({
   id: z.uuid().optional(),

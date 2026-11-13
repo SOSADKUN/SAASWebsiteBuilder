@@ -21,9 +21,12 @@ describe("merchant navigation boundaries", () => {
     expect(navigationItems.some((item) => item.id === "categories")).toBe(
       false,
     );
-    expect(navigationForPath("/dashboard/designs/")?.view).toBe(
-      "Design Gallery",
-    );
+    expect(navigationForPath("/dashboard/designs/")).toBeUndefined();
+    expect(
+      navigationItems.some(
+        (item) => item.view === ("Component Store" as string),
+      ),
+    ).toBe(false);
     expect(navigationForPath("/dashboard/website/editor")?.view).toBe(
       "Website Editor",
     );
@@ -51,7 +54,6 @@ describe("merchant navigation boundaries", () => {
         ?.children.map((item) => item.view),
     ).toEqual([
       "Website Editor",
-      "Design Gallery",
       "Pages",
       "Media Library",
       "Preview / Publish",
@@ -73,7 +75,7 @@ describe("merchant navigation boundaries", () => {
       <MerchantSidebar
         businessName="Merchant Café"
         email="owner@example.test"
-        view="Design Gallery"
+        view="Website Editor"
         open={false}
         dark={false}
         capabilities={capabilitiesForRole("owner")}

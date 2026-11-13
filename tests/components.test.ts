@@ -98,7 +98,7 @@ describe("trusted component configuration", () => {
       "Duplicate",
     );
     expect(() =>
-      layoutSchema.parse([{ ...sections[0], version: 3 }]),
+      layoutSchema.parse([{ ...sections[0], version: 4 }]),
     ).toThrow();
   });
   it("blocks executable and protocol-relative URLs", () => {
