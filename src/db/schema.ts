@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { Section } from "../lib/models";
+import type { OrderStatus } from "../lib/order-policy";
 const id = () => uuid("id").primaryKey().defaultRandom();
 const created = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -335,3 +336,126 @@ export const merchantTrialClaims = pgTable("merchant_trial_claims", {
     .references(() => merchants.id),
   claimedAt: created(),
 });
+
+export const orderCounters = pgTable("pos_order_counters", {
+  merchantId: uuid("merchant_id")
+    .primaryKey()
+    .references(() => merchants.id),
+  lastNumber: integer("last_number").notNull().default(0),
+});
+export const orders = pgTable(
+  "pos_orders",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id),
+    number: integer("number").notNull(),
+    requestId: uuid("request_id").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    status: text("status").$type<OrderStatus>().notNull().default("pending"),
+    version: integer("version").notNull().default(0),
+    fulfillment: text("fulfillment").$type<"dine_in" | "takeaway">().notNull(),
+    tableLabel: text("table_label").notNull().default(""),
+    note: text("note").notNull().default(""),
+    total: integer("total").notNull(),
+    payment: text("payment").$type<"cash" | "unpaid">().notNull(),
+    cashReceived: integer("cash_received"),
+    changeDue: integer("change_due").notNull().default(0),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: created(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    cancelReason: text("cancel_reason"),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancellationAcknowledgedAt: timestamp("cancellation_acknowledged_at", {
+      withTimezone: true,
+    }),
+    cancellationAcknowledgedBy: uuid("cancellation_acknowledged_by"),
+  },
+  (t) => [
+    uniqueIndex("pos_order_number_unique").on(t.merchantId, t.number),
+    uniqueIndex("pos_order_request_unique").on(t.merchantId, t.requestId),
+    uniqueIndex("pos_order_tenant_id").on(t.merchantId, t.id),
+    index("pos_order_queue").on(t.merchantId, t.status, t.createdAt),
+    check(
+      "pos_order_status_valid",
+      sql`${t.status} IN ('pending','preparing','ready','completed','cancelled')`,
+    ),
+    check(
+      "pos_order_fulfillment_valid",
+      sql`${t.fulfillment} IN ('dine_in','takeaway')`,
+    ),
+    check("pos_order_payment_valid", sql`${t.payment} IN ('cash','unpaid')`),
+    check(
+      "pos_order_amounts_valid",
+      sql`${t.total} >= 0 AND ${t.changeDue} >= 0 AND (${t.cashReceived} IS NULL OR ${t.cashReceived} >= ${t.total})`,
+    ),
+    check(
+      "pos_order_cash_valid",
+      sql`(${t.payment} = 'cash' AND ${t.cashReceived} IS NOT NULL AND ${t.changeDue} = ${t.cashReceived} - ${t.total}) OR (${t.payment} = 'unpaid' AND ${t.cashReceived} IS NULL AND ${t.changeDue} = 0)`,
+    ),
+    check(
+      "pos_order_cancellation_valid",
+      sql`(${t.status} = 'cancelled' AND ${t.cancelledAt} IS NOT NULL AND ${t.cancelReason} IS NOT NULL AND length(trim(${t.cancelReason})) >= 3) OR (${t.status} <> 'cancelled' AND ${t.cancelledAt} IS NULL AND ${t.cancelReason} IS NULL)`,
+    ),
+    check(
+      "pos_order_version_valid",
+      sql`${t.version} >= 0 AND ${t.number} > 0`,
+    ),
+  ],
+);
+export const orderItems = pgTable(
+  "pos_order_items",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id").notNull(),
+    orderId: uuid("order_id").notNull(),
+    // Snapshot source ID deliberately has no product FK: deleting/editing a menu
+    // product must never remove or rewrite an already submitted kitchen ticket.
+    productId: uuid("product_id").notNull(),
+    name: text("name").notNull(),
+    image: text("image").notNull().default(""),
+    unitPrice: integer("unit_price").notNull(),
+    quantity: integer("quantity").notNull(),
+    lineTotal: integer("line_total").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: "pos_item_order_tenant_fk",
+      columns: [t.merchantId, t.orderId],
+      foreignColumns: [orders.merchantId, orders.id],
+    }),
+    uniqueIndex("pos_item_product_unique").on(t.orderId, t.productId),
+    index("pos_item_order").on(t.merchantId, t.orderId),
+    check(
+      "pos_item_amounts_valid",
+      sql`${t.quantity} BETWEEN 1 AND 99 AND ${t.unitPrice} BETWEEN 0 AND 10000000 AND ${t.lineTotal} = ${t.unitPrice} * ${t.quantity}`,
+    ),
+  ],
+);
+export const orderEvents = pgTable(
+  "pos_order_events",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id").notNull(),
+    orderId: uuid("order_id").notNull(),
+    version: integer("version").notNull(),
+    kind: text("kind").notNull(),
+    fromStatus: text("from_status").$type<OrderStatus>(),
+    toStatus: text("to_status").$type<OrderStatus>().notNull(),
+    reason: text("reason").notNull().default(""),
+    actorId: uuid("actor_id").notNull(),
+    createdAt: created(),
+  },
+  (t) => [
+    foreignKey({
+      name: "pos_event_order_tenant_fk",
+      columns: [t.merchantId, t.orderId],
+      foreignColumns: [orders.merchantId, orders.id],
+    }),
+    uniqueIndex("pos_event_version_unique").on(t.orderId, t.version),
+    index("pos_event_order").on(t.merchantId, t.orderId),
+  ],
+);

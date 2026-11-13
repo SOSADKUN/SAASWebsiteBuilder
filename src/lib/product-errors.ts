@@ -1,5 +1,23 @@
 import { z } from "zod";
 import { workspaceErrorCode } from "./workspace-errors";
+import { MAX_UPLOAD_LABEL } from "./uploads";
+
+export function productImageErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message === `Choose an image up to ${MAX_UPLOAD_LABEL}`)
+      return `Choose an image up to ${MAX_UPLOAD_LABEL}.`;
+    if (error.message === "Only valid JPEG, PNG and WebP images are accepted")
+      return "Choose a valid JPG, PNG or WebP image.";
+    if (
+      error.message === "Business access denied" ||
+      error.message === "Workspace permission required"
+    )
+      return "You do not have permission to upload product images for this business.";
+    if (error.message.startsWith("Subscription required:"))
+      return "Your trial has ended. Open Subscription & Billing to upload images.";
+  }
+  return "We could not upload this image. Try again, or contact support with the reference below.";
+}
 
 export function productErrorMessage(error: unknown) {
   if (error instanceof z.ZodError)

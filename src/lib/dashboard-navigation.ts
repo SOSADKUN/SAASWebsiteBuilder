@@ -2,7 +2,8 @@ import type { MerchantCapability } from "./merchant-capabilities";
 export type DashboardView =
   | "Overview"
   | "Menu Manager"
-  | "Category Management"
+  | "POS / Cashier"
+  | "Orders"
   | "Website Settings"
   | "Website Editor"
   | "Design Gallery"
@@ -35,8 +36,20 @@ export const primaryNavigation: NavigationItem[] = [
     href: "/dashboard",
     requires: "workspace:view",
   },
-  { id: "pos", label: "POS / Cashier", comingSoon: true },
-  { id: "orders", label: "Orders", comingSoon: true },
+  {
+    id: "pos",
+    label: "POS / Cashier",
+    view: "POS / Cashier",
+    href: "/dashboard/pos",
+    requires: "pos:operate",
+  },
+  {
+    id: "orders",
+    label: "Orders",
+    view: "Orders",
+    href: "/dashboard/orders",
+    requires: "orders:manage",
+  },
 ];
 export const navigationGroups: NavigationGroup[] = [
   {
@@ -53,13 +66,6 @@ export const navigationGroups: NavigationGroup[] = [
       },
       { id: "employees", label: "Employee Management", comingSoon: true },
       { id: "tables", label: "Table Management", comingSoon: true },
-      {
-        id: "categories",
-        label: "Category Management",
-        view: "Category Management",
-        href: "/dashboard/maintenance/categories",
-        requires: "menu:manage",
-      },
       { id: "promotions", label: "Promotions", comingSoon: true },
       {
         id: "business",

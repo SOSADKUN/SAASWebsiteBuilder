@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import type { DashboardData as Data } from "./types";
 import { MenuManager } from "./menu-manager";
+import { PosScreen } from "@/components/operations/pos-screen";
+import { OrdersScreen } from "@/components/operations/orders-screen";
 import { ComponentGallery } from "@/components/designs/component-gallery";
 import { Editor } from "@/components/editor/editor";
 import { WebsiteRenderer } from "@/components/website/registry";
@@ -743,12 +745,17 @@ export function Dashboard({
               )}
             </>
           )}
-          {(tab === "Menu Manager" || tab === "Category Management") && (
-            <div
-              className={
-                tab === "Category Management" ? "category-management-view" : ""
-              }
-            >
+          {tab === "POS / Cashier" && (
+            <PosScreen data={data} enabled={access.allowed} />
+          )}
+          {tab === "Orders" && (
+            <OrdersScreen
+              merchantId={data.business.id}
+              enabled={access.allowed}
+            />
+          )}
+          {tab === "Menu Manager" && (
+            <div>
               <MenuManager data={data} run={run} pending={pending} />
             </div>
           )}

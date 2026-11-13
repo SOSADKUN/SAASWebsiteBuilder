@@ -15,13 +15,16 @@ const mocks = vi.hoisted(() => ({
   authorize: vi.fn(),
   db: vi.fn(),
   revalidatePath: vi.fn(),
+  supabase: vi.fn(),
+  storageUpload: vi.fn(),
+  storageRemove: vi.fn(),
 }));
 vi.mock("@/db", () => ({ db: mocks.db }));
 vi.mock("@/lib/auth", () => ({
   authorize: mocks.authorize,
   user: vi.fn(),
   admin: vi.fn(),
-  supabase: vi.fn(),
+  supabase: mocks.supabase,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({
@@ -31,7 +34,11 @@ vi.mock("next/navigation", () => ({
   },
 }));
 import * as schema from "../src/db/schema";
-import { saveProduct, saveMenuProduct } from "../src/server/actions";
+import {
+  saveProduct,
+  saveMenuProduct,
+  uploadMenuProductImage,
+} from "../src/server/actions";
 let database: PGlite;
 const merchantId = "11111111-1111-4111-8111-111111111111";
 const otherMerchantId = "22222222-2222-4222-8222-222222222222";
@@ -74,11 +81,69 @@ beforeEach(() => {
   mocks.db.mockReturnValue(drizzle(database, { schema }));
   mocks.authorize.mockResolvedValue({ id: "test-owner" });
   mocks.revalidatePath.mockImplementation(() => {});
+  mocks.storageUpload.mockResolvedValue({ error: null });
+  mocks.storageRemove.mockResolvedValue({ error: null });
+  mocks.supabase.mockResolvedValue({
+    storage: {
+      from: () => ({
+        upload: mocks.storageUpload,
+        remove: mocks.storageRemove,
+        getPublicUrl: () => ({
+          data: { publicUrl: "https://images.example.test/product.jpg" },
+        }),
+      }),
+    },
+  });
 });
 afterAll(async () => {
   await database?.close();
 });
 describe("product writes against migrated PostgreSQL", () => {
+  it("uploads a product image with menu authorization without reloading the workspace", async () => {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0])], "coffee.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    expect(await uploadMenuProductImage(merchantId, form)).toEqual({
+      ok: true,
+      url: "https://images.example.test/product.jpg",
+    });
+    expect(mocks.authorize).toHaveBeenCalledWith(merchantId, "menu:manage");
+    expect(mocks.storageUpload).toHaveBeenCalledTimes(1);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    expect(
+      (
+        await database.query(
+          "SELECT name FROM media_assets WHERE name='coffee.jpg'",
+        )
+      ).rows,
+    ).toHaveLength(1);
+  });
+  it("rejects an invalid image without contacting storage", async () => {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File(["not an image"], "bad.png", { type: "image/png" }),
+    );
+    expect(await uploadMenuProductImage(merchantId, form)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("valid JPG"),
+      reference: expect.any(String),
+    });
+    expect(mocks.storageUpload).not.toHaveBeenCalled();
+  });
+  it("retains subscription enforcement for product images", async () => {
+    expect(
+      await uploadMenuProductImage(expiredMerchantId, new FormData()),
+    ).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("trial has ended"),
+    });
+    expect(mocks.storageUpload).not.toHaveBeenCalled();
+  });
   it("creates a product without an image and updates it without changing its creation timestamp", async () => {
     await expect(saveProduct(merchantId, product)).resolves.toBeUndefined();
     const before = await database.query<{ id: string; created_at: Date }>(
@@ -117,7 +182,7 @@ describe("product writes against migrated PostgreSQL", () => {
         )
       ).rows,
     ).toHaveLength(1);
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
   });
   it("returns a readable category error without inserting another tenant's category", async () => {
     const result = await saveMenuProduct(merchantId, {

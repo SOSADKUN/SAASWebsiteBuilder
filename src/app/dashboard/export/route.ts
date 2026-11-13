@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
         entitlements: s.entitlements,
         subscriptions: s.merchantSubscriptions,
         subscriptionEvents: s.subscriptionEvents,
+        orders: s.orders,
+        orderItems: s.orderItems,
+        orderEvents: s.orderEvents,
       };
       const entries = await Promise.all(
         Object.entries(tables).map(async ([key, table]) => [

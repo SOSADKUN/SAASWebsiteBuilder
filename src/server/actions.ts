@@ -9,7 +9,10 @@ import {
 } from "@/lib/workspace-errors";
 import { db } from "@/db";
 import { workspaceTrace } from "@/lib/workspace-diagnostics";
-import { productErrorMessage } from "@/lib/product-errors";
+import {
+  productErrorMessage,
+  productImageErrorMessage,
+} from "@/lib/product-errors";
 import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
@@ -62,7 +65,7 @@ export async function signUp(form: FormData) {
 }
 export async function signOut() {
   const client = await supabase();
-  await client.auth.signOut();
+  await client.auth.signOut({ scope: "local" });
   redirect("/login");
 }
 export async function createBusiness(form: FormData) {
@@ -305,17 +308,21 @@ async function saveProductRecord(
   await trace.step("authorization", () =>
     authorize(z.uuid().parse(merchantId), "menu:manage"),
   );
-  await trace.step("subscription", () => requireSubscription(merchantId));
   const value = productSchema.parse(input);
   const database = db();
-  const category = await trace.step("category", () =>
-    database.query.categories.findFirst({
-      where: and(
-        eq(s.categories.id, value.categoryId),
-        eq(s.categories.merchantId, merchantId),
-      ),
-    }),
-  );
+  // Independent reads may use separate pool connections once membership and
+  // capability are verified. Both must succeed before any product is written.
+  const [, category] = await Promise.all([
+    trace.step("subscription", () => requireSubscription(merchantId)),
+    trace.step("category", () =>
+      database.query.categories.findFirst({
+        where: and(
+          eq(s.categories.id, value.categoryId),
+          eq(s.categories.merchantId, merchantId),
+        ),
+      }),
+    ),
+  ]);
   if (!category) throw new Error("Invalid category");
   await trace.step("product_write", async () => {
     if (value.id) {
@@ -332,7 +339,10 @@ async function saveProductRecord(
       if (!rows.length) throw new Error("Product not found");
     } else await database.insert(s.products).values({ ...value, merchantId });
   });
-  await trace.step("revalidation", async () => revalidatePath("/dashboard"));
+  // Include the menu's nested Dashboard routes as well as the root entry page.
+  await trace.step("revalidation", async () =>
+    revalidatePath("/dashboard", "layout"),
+  );
 }
 export async function deleteProduct(merchantId: string, id: string) {
   await authorize(merchantId, "menu:manage");
@@ -432,7 +442,39 @@ export async function updateBusiness(merchantId: string, form: FormData) {
   revalidatePath("/dashboard");
 }
 export async function upload(merchantId: string, form: FormData) {
-  await authorize(merchantId, "website:manage");
+  const url = await uploadAssetRecord(merchantId, form, "website:manage");
+  revalidatePath("/dashboard");
+  return url;
+}
+export async function uploadMenuProductImage(
+  merchantId: string,
+  form: FormData,
+): Promise<
+  { ok: true; url: string } | { ok: false; error: string; reference: string }
+> {
+  const trace = workspaceTrace("menu.product.image");
+  try {
+    const url = await trace.step("upload", () =>
+      uploadAssetRecord(merchantId, form, "menu:manage"),
+    );
+    // The product save revalidates the Dashboard. Selecting an image should
+    // not reload every workspace query while the user is still filling a form.
+    return { ok: true, url };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      ok: false,
+      error: productImageErrorMessage(error),
+      reference: trace.reference,
+    };
+  }
+}
+async function uploadAssetRecord(
+  merchantId: string,
+  form: FormData,
+  capability: "website:manage" | "menu:manage",
+) {
+  await authorize(z.uuid().parse(merchantId), capability);
   await requireSubscription(merchantId);
   const file = form.get("file");
   if (
@@ -486,7 +528,6 @@ export async function upload(merchantId: string, form: FormData) {
     await client.storage.from("merchant-media").remove([path]);
     throw error;
   }
-  revalidatePath("/dashboard");
   return data.publicUrl;
 }
 export async function adminListing(form: FormData) {

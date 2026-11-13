@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Search, Coffee, X } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, Pencil, Trash2, Search, Coffee } from "lucide-react";
+import { ProductEditor } from "./product-editor";
 import type { DashboardData as Data } from "./types";
 import type { Product } from "@/lib/models";
 import {
@@ -8,7 +9,6 @@ import {
   deleteProduct,
   saveCategory,
   deleteCategory,
-  upload,
 } from "@/server/actions";
 export function MenuManager({
   data,
@@ -28,13 +28,32 @@ export function MenuManager({
   const [categoryName, setCategoryName] = useState("");
   const [categoryEdit, setCategoryEdit] = useState<string | undefined>();
   const [search, setSearch] = useState("");
-  async function persistProduct(input: Parameters<typeof saveMenuProduct>[1]) {
-    const result = await saveMenuProduct(data.business.id, input);
-    if (!result.ok) {
-      setProductError(result);
-      // The shared runner must not show a success notice or refresh on failure.
-      throw new Error(`${result.error} Support reference: ${result.reference}`);
-    }
+  const [menuNotice, setMenuNotice] = useState("");
+  const [productPending, startProductTransition] = useTransition();
+  function toggleProduct(product: Product) {
+    setProductError(null);
+    setMenuNotice("");
+    startProductTransition(async () => {
+      try {
+        const result = await saveMenuProduct(data.business.id, {
+          ...product,
+          available: !product.available,
+        });
+        if (!result.ok) {
+          setProductError(result);
+          return;
+        }
+        setMenuNotice(
+          product.available ? "Product hidden." : "Product available.",
+        );
+      } catch {
+        setProductError({
+          error:
+            "We could not confirm the save. Check your menu before trying again.",
+          reference: "",
+        });
+      }
+    });
   }
   return (
     <>
@@ -46,6 +65,7 @@ export function MenuManager({
         </div>
         <button
           className="button primary"
+          disabled={pending || productPending}
           onClick={() => {
             setProductError(null);
             setEditing({
@@ -58,6 +78,21 @@ export function MenuManager({
           <Plus size={16} /> Add product
         </button>
       </div>
+      {menuNotice && (
+        <p className="notice" role="status">
+          {menuNotice}
+        </p>
+      )}
+      {productError && (
+        <p className="notice error" role="alert">
+          {productError.error}
+          {productError.reference && (
+            <span className="workspace-reference">
+              Support reference: {productError.reference}
+            </span>
+          )}
+        </p>
+      )}
       <div className="menu-layout">
         <aside className="panel categories-panel">
           <h3>Categories</h3>
@@ -182,19 +217,8 @@ export function MenuManager({
                       <td>
                         <button
                           className={`pill ${p.available ? "" : "unavailable"}`}
-                          disabled={pending}
-                          onClick={() =>
-                            run(
-                              () =>
-                                persistProduct({
-                                  ...p,
-                                  available: !p.available,
-                                }),
-                              p.available
-                                ? "Product hidden."
-                                : "Product available.",
-                            )
-                          }
+                          disabled={pending || productPending}
+                          onClick={() => toggleProduct(p)}
                         >
                           {p.available ? "Available" : "Hidden"}
                         </button>
@@ -238,162 +262,16 @@ export function MenuManager({
         </div>
       </div>
       {editing && (
-        <div className="modal-overlay">
-          <div
-            className="product-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Edit product"
-          >
-            <div className="modal-heading">
-              <h3>{editing.id ? "Edit product" : "A new menu favorite"}</h3>
-              <button
-                className="icon-button"
-                aria-label="Close product form"
-                onClick={() => setEditing(null)}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                const form = new FormData(event.currentTarget);
-                setProductError(null);
-                // Capture the values before starting the async action. Using a
-                // submit handler retains the form values when saving fails.
-                const input = {
-                  id: editing.id,
-                  name: String(form.get("name")),
-                  description: String(form.get("description")),
-                  price: Math.round(Number(form.get("price")) * 100),
-                  image: String(form.get("image")),
-                  categoryId: String(form.get("categoryId")),
-                  available: form.get("available") === "on",
-                  position: Number(form.get("position")),
-                };
-                run(async () => {
-                  await persistProduct(input);
-                  setEditing(null);
-                }, "Product saved.");
-              }}
-            >
-              {productError && (
-                <p className="notice error" role="alert">
-                  {productError.error}
-                  <span className="workspace-reference">
-                    Support reference: {productError.reference}
-                  </span>
-                </p>
-              )}
-              <label>
-                Product name
-                <input
-                  name="name"
-                  defaultValue={editing.name}
-                  maxLength={120}
-                  required
-                />
-              </label>
-              <label>
-                Description
-                <textarea
-                  name="description"
-                  defaultValue={editing.description}
-                  maxLength={1000}
-                />
-              </label>
-              <div className="form-columns">
-                <label>
-                  Price (RM)
-                  <input
-                    name="price"
-                    type="number"
-                    min="0"
-                    max="100000"
-                    step="0.01"
-                    defaultValue={(editing.price ?? 0) / 100}
-                    required
-                  />
-                </label>
-                <label>
-                  Category
-                  <select
-                    name="categoryId"
-                    defaultValue={editing.categoryId}
-                    required
-                  >
-                    {data.categories.map((c) => (
-                      <option value={c.id} key={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label>
-                Image URL
-                <input
-                  name="image"
-                  value={editing.image ?? ""}
-                  onChange={(e) =>
-                    setEditing({ ...editing, image: e.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Upload product image
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  disabled={pending}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const form = new FormData();
-                    form.set("file", file);
-                    run(
-                      async () =>
-                        setEditing({
-                          ...editing,
-                          image: await upload(data.business.id, form),
-                        }),
-                      "Image uploaded.",
-                    );
-                  }}
-                />
-              </label>
-              <label>
-                Display order
-                <input
-                  name="position"
-                  type="number"
-                  min="0"
-                  max="10000"
-                  defaultValue={editing.position ?? 0}
-                  required
-                />
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="available"
-                  defaultChecked={editing.available}
-                />{" "}
-                Available on website
-              </label>
-              <button
-                className="button primary"
-                disabled={pending || !data.categories.length}
-              >
-                {pending ? "Saving…" : "Save product"}
-              </button>
-              {!data.categories.length && (
-                <p>Add a category before creating a product.</p>
-              )}
-            </form>
-          </div>
-        </div>
+        <ProductEditor
+          product={editing}
+          categories={data.categories}
+          merchantId={data.business.id}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            setMenuNotice("Product saved.");
+          }}
+        />
       )}
     </>
   );

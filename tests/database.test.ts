@@ -58,6 +58,62 @@ async function asUser(role: string, id = userA) {
   await database.exec(`SET ROLE ${role}`);
 }
 describe("PostgreSQL migrations and tenant RLS", () => {
+  it("isolates order tickets and blocks browser order writes", async () => {
+    await asUser("postgres");
+    const a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await database.query(
+      "INSERT INTO pos_orders(id,merchant_id,number,request_id,fingerprint,fulfillment,total,payment,created_by) VALUES ($1,$2,1,$1,'test','takeaway',100,'unpaid',$3),($4,$5,1,$4,'test','takeaway',100,'unpaid',$6)",
+      [a, merchantA, userA, b, merchantB, userB],
+    );
+    await database.query(
+      "INSERT INTO pos_order_items(merchant_id,order_id,product_id,name,unit_price,quantity,line_total) VALUES ($1,$2,$2,'A ticket item',100,1,100),($3,$4,$4,'B ticket item',100,1,100)",
+      [merchantA, a, merchantB, b],
+    );
+    await database.query(
+      "INSERT INTO pos_order_events(merchant_id,order_id,version,kind,to_status,actor_id) VALUES ($1,$2,0,'created','pending',$3),($4,$5,0,'created','pending',$6)",
+      [merchantA, a, userA, merchantB, b, userB],
+    );
+    await asUser("authenticated", userA);
+    expect((await database.query("SELECT id FROM pos_orders")).rows).toEqual([
+      { id: a },
+    ]);
+    expect(
+      (await database.query("SELECT name FROM pos_order_items")).rows,
+    ).toEqual([{ name: "A ticket item" }]);
+    expect(
+      (await database.query("SELECT order_id FROM pos_order_events")).rows,
+    ).toEqual([{ order_id: a }]);
+    expect(
+      (await database.query("SELECT * FROM pos_order_counters")).rows,
+    ).toEqual([]);
+    await expect(
+      database.exec("UPDATE pos_orders SET status='completed'"),
+    ).rejects.toThrow(/permission denied/);
+    await expect(database.exec("DELETE FROM pos_order_events")).rejects.toThrow(
+      /permission denied/,
+    );
+    await asUser("authenticated", userB);
+    expect((await database.query("SELECT id FROM pos_orders")).rows).toEqual([
+      { id: b },
+    ]);
+    await asUser("postgres");
+    await expect(
+      database.query(
+        "INSERT INTO pos_order_items(merchant_id,order_id,product_id,name,unit_price,quantity,line_total) VALUES ($1,$2,$3,'Cross tenant',100,1,100)",
+        [merchantA, b, a],
+      ),
+    ).rejects.toThrow(/pos_item_order_tenant_fk/);
+    await expect(
+      database.query(
+        "UPDATE pos_orders SET status='cancelled',cancelled_at=CURRENT_TIMESTAMP,cancel_reason=NULL WHERE id=$1",
+        [a],
+      ),
+    ).rejects.toThrow(/pos_order_cancellation_valid/);
+    await expect(
+      database.exec("UPDATE pos_order_events SET reason='changed'"),
+    ).rejects.toThrow(/append-only/);
+  });
   it("backfills old trials without restarting or deleting existing merchants", async () => {
     await asUser("postgres");
     const result = await database.query<{
@@ -208,7 +264,7 @@ describe("PostgreSQL migrations and tenant RLS", () => {
       tablename: string;
       rowsecurity: boolean;
     }>("SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname='public'");
-    expect(result.rows).toHaveLength(18);
+    expect(result.rows).toHaveLength(22);
     expect(result.rows.every((t) => t.rowsecurity)).toBe(true);
   });
   it("only lets each merchant read its own business and menu records", async () => {

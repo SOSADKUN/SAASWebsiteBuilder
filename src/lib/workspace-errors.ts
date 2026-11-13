@@ -28,6 +28,14 @@ export function workspaceErrorCode(error: unknown): string {
     "QUEUE_TIMEOUT",
     "CANCEL_TIMEOUT",
     "CANCEL_UNANSWERED",
+    "CONFLICT",
+    "MENU_CHANGED",
+    "REQUEST_REUSED",
+    "REASON_REQUIRED",
+    "INVALID_TOTAL",
+    "INVALID_TRANSITION",
+    "NOT_FOUND",
+    "INSUFFICIENT_CASH",
   ]);
   let current = error;
   for (

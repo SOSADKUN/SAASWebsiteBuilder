@@ -48,6 +48,7 @@ beforeEach(() => {
   const query = { leftJoin: vi.fn(), where: mocks.where };
   query.leftJoin.mockReturnValue(query);
   mocks.db.mockReturnValue({
+    query: { categories: { findFirst: vi.fn().mockResolvedValue(undefined) } },
     select: () => ({ from: () => query }),
     transaction: mocks.transaction,
   });

@@ -16,6 +16,11 @@ import { MerchantSidebar } from "../src/components/dashboard/sidebar";
 describe("merchant navigation boundaries", () => {
   it("keeps existing entry routes and resolves implemented module deep links", () => {
     expect(navigationForPath("/dashboard")?.view).toBe("Overview");
+    expect(navigationForPath("/dashboard/pos")?.view).toBe("POS / Cashier");
+    expect(navigationForPath("/dashboard/orders")?.view).toBe("Orders");
+    expect(navigationItems.some((item) => item.id === "categories")).toBe(
+      false,
+    );
     expect(navigationForPath("/dashboard/designs/")?.view).toBe(
       "Design Gallery",
     );
@@ -36,11 +41,7 @@ describe("merchant navigation boundaries", () => {
       expect(item.href).toBeUndefined();
       expect(item.view).toBeUndefined();
     }
-    for (const path of [
-      "/dashboard/pos",
-      "/dashboard/orders",
-      "/dashboard/maintenance/employees",
-    ])
+    for (const path of ["/dashboard/maintenance/employees"])
       expect(navigationForPath(path)).toBeUndefined();
   });
   it("retains all existing builder destinations inside the website group", () => {
@@ -86,7 +87,9 @@ describe("merchant navigation boundaries", () => {
     expect(html).toContain("<details");
     expect(html).toContain("Coming soon");
     expect(html).toContain('aria-disabled="true"');
-    expect(html).not.toContain('href="/dashboard/pos"');
+    expect(html).toContain('href="/dashboard/pos"');
+    expect(html).toContain('href="/dashboard/orders"');
+    expect(html).not.toContain("Category Management");
     expect(html).not.toContain("Current outlet");
   });
   it("hides protected destinations without removing the future module labels", () => {

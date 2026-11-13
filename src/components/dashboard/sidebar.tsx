@@ -138,7 +138,14 @@ export function MerchantSidebar({
         className={`platform-nav-item ${nested ? "nested" : ""} ${view === item.view ? "active" : ""}`}
         onClick={(event) => activate(event, item)}
       >
-        {!nested && <LayoutDashboard size={17} />}
+        {!nested &&
+          (item.id === "pos" ? (
+            <Monitor size={17} />
+          ) : item.id === "orders" ? (
+            <ClipboardList size={17} />
+          ) : (
+            <LayoutDashboard size={17} />
+          ))}
         <span>{item.label}</span>
         {item.id === "designs" && (
           <small className="design-nav-badge">DESIGN</small>

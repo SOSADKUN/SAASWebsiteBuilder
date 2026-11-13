@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { navigationForPath } from "@/lib/dashboard-navigation";
 import { DashboardScreen } from "@/components/dashboard/dashboard-screen";
 export const dynamic = "force-dynamic";
@@ -10,6 +10,8 @@ export default async function ModulePage({
   params: Promise<{ module: string[] }>;
 }) {
   const { module } = await params;
+  if (module.join("/") === "maintenance/categories")
+    redirect("/dashboard/maintenance/menu");
   const item = navigationForPath(`/dashboard/${module.join("/")}`);
   if (!item?.view || item.comingSoon) notFound();
   return (

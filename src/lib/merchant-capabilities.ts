@@ -3,6 +3,8 @@
 // must also be checked by the corresponding server loaders/actions.
 export const merchantCapabilities = [
   "workspace:view",
+  "pos:operate",
+  "orders:manage",
   "website:manage",
   "menu:manage",
   "business:manage",
