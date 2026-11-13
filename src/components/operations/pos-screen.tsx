@@ -267,56 +267,71 @@ export function PosScreen({
       )}
       <div className="pos-workspace">
         <section className="pos-menu" aria-label="Menu products">
-          <label className="pos-search">
-            <Search size={17} />
-            <input
-              aria-label="Search POS menu"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search your menu…"
-            />
-          </label>
-          <div className="pos-categories" aria-label="Menu categories">
-            <button
-              className={category === "all" ? "active" : ""}
-              aria-pressed={category === "all"}
-              onClick={() => setCategory("all")}
-            >
-              All items{" "}
-              <span>
-                {products.filter((product) => product.available).length}
-              </span>
-            </button>
-            {categories.map((item) => (
+          <div className="pos-menu-tools">
+            <label className="pos-search">
+              <Search size={17} />
+              <input
+                aria-label="Search POS menu"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search your menu…"
+              />
+            </label>
+            <div className="pos-categories" aria-label="Menu categories">
               <button
-                key={item.id}
-                className={category === item.id ? "active" : ""}
-                aria-pressed={category === item.id}
-                onClick={() => setCategory(item.id)}
+                className={category === "all" ? "active" : ""}
+                aria-pressed={category === "all"}
+                onClick={() => setCategory("all")}
               >
-                {item.name}
+                All items{" "}
+                <span>
+                  {products.filter((product) => product.available).length}
+                </span>
               </button>
-            ))}
+              {categories.map((item) => (
+                <button
+                  key={item.id}
+                  className={category === item.id ? "active" : ""}
+                  aria-pressed={category === item.id}
+                  onClick={() => setCategory(item.id)}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="pos-product-grid">
-            {filtered.map((product) => (
-              <button
-                key={product.id}
-                className="pos-product"
-                disabled={locked || !enabled}
-                onClick={() => addProduct(product.id)}
-                aria-label={`Add ${product.name} to bill`}
-              >
-                <span className="pos-product__image">
-                  <CatalogImage src={product.image} />
-                </span>
-                <span className="pos-product__name">{product.name}</span>
-                <span className="pos-product__price">
-                  {formatMoney(product.price)}
-                  <Plus size={17} />
-                </span>
-              </button>
-            ))}
+            {filtered.map((product) => {
+              const quantity =
+                draft.lines.find((line) => line.productId === product.id)
+                  ?.quantity ?? 0;
+              return (
+                <button
+                  key={product.id}
+                  className={`pos-product${quantity ? " pos-product--selected" : ""}`}
+                  disabled={locked || !enabled}
+                  onClick={() => addProduct(product.id)}
+                  aria-label={`Add ${product.name} to bill`}
+                >
+                  <span className="pos-product__image">
+                    <CatalogImage src={product.image} />
+                    {quantity > 0 && (
+                      <span
+                        className="pos-product__quantity"
+                        aria-label={`${quantity} in bill`}
+                      >
+                        {quantity} in bill
+                      </span>
+                    )}
+                  </span>
+                  <span className="pos-product__name">{product.name}</span>
+                  <span className="pos-product__price">
+                    {formatMoney(product.price)}
+                    <Plus size={17} />
+                  </span>
+                </button>
+              );
+            })}
           </div>
           {!filtered.length && (
             <div className="ops-empty">

@@ -76,13 +76,27 @@ export function OrderTicket({
         <div className="order-ticket__cancel">
           <XCircle size={16} />
           <div>
-            <b>Stop preparation — cancelled</b>
+            <b>
+              {mode === "kitchen" && !order.cancellationAcknowledgedAt
+                ? "Stop preparation — cancelled"
+                : "Cancellation reason"}
+            </b>
             <p>{order.cancelReason}</p>
-            {order.payment === "cash" && (
-              <small>
-                Cash was recorded. Handle any refund at the counter.
-              </small>
-            )}
+            <small
+              className={
+                order.cancellationAcknowledgedAt
+                  ? "order-ticket__acknowledged"
+                  : ""
+              }
+            >
+              {order.cancellationAcknowledgedAt ? (
+                <>
+                  <Check size={12} /> Kitchen acknowledged
+                </>
+              ) : (
+                "Awaiting kitchen acknowledgement"
+              )}
+            </small>
           </div>
         </div>
       )}
@@ -126,13 +140,13 @@ export function OrderTicket({
             )}
         </div>
       </footer>
-      {order.cancellationAcknowledgedAt && (
-        <small className="order-ticket__ack">
-          <Check size={12} /> Kitchen acknowledged cancellation
-        </small>
-      )}
       <details className="order-ticket__history">
         <summary>Activity · {order.events.length} updates</summary>
+        {order.status === "cancelled" && order.payment === "cash" && (
+          <p className="order-ticket__refund">
+            Cash was recorded. Handle any refund at the counter.
+          </p>
+        )}
         <ol>
           {order.events.map((event) => (
             <li key={event.id}>

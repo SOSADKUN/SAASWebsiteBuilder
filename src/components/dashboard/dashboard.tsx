@@ -30,10 +30,12 @@ import {
   X,
   Globe,
   ChevronRight,
-  Leaf,
+  Trash2,
 } from "lucide-react";
 import type { DashboardData as Data } from "./types";
 import { MenuManager } from "./menu-manager";
+import { OverviewStats } from "./overview-stats";
+import { DeleteMediaDialog } from "./delete-media-dialog";
 import { PosScreen } from "@/components/operations/pos-screen";
 import { OrdersScreen } from "@/components/operations/orders-screen";
 import { ComponentGallery } from "@/components/designs/component-gallery";
@@ -69,6 +71,10 @@ export function Dashboard({
     setDesignHistory,
   } = useMerchantWorkspace();
   const [notice, setNotice] = useState("");
+  const [deleteAsset, setDeleteAsset] = useState<Data["media"][number] | null>(
+    null,
+  );
+  const [deletedMedia, setDeletedMedia] = useState<string[]>([]);
   const [preview, setPreview] = useState(initialTab === "Preview / Publish");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All components");
@@ -271,26 +277,23 @@ export function Dashboard({
           )}
           {tab === "Overview" && (
             <>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">A LITTLE SPACE FOR BIG IDEAS</span>
-                  <h1>
-                    Let’s grow something good
-                    <span className="heading-flower">✳</span>
-                  </h1>
-                  <p>
-                    Welcome back. Here’s what’s happening with{" "}
-                    {data.business.name}.
-                  </p>
-                </div>
-                <button
-                  className="button primary"
-                  onClick={() => navigate("Website Editor")}
-                >
-                  Continue editing <ArrowUpRight size={16} />
-                </button>
+              <div className="page-heading overview-heading">
+                <h1>
+                  Welcome back. Here’s what’s happening with{" "}
+                  {data.business.name}.
+                </h1>
               </div>
-              <div className="overview-grid">
+              <div className="overview-grid overview-summary">
+                <OverviewStats
+                  merchantId={data.business.id}
+                  products={data.products.length}
+                  available={data.products.filter((p) => p.available).length}
+                  collection={
+                    catalog.filter(
+                      (d) => !d.premium || data.unlocked.includes(d.key),
+                    ).length
+                  }
+                />
                 <div className="website-card">
                   <div className="card-title">
                     <div>
@@ -326,65 +329,17 @@ export function Dashboard({
                     </div>
                     <button
                       className="button compact"
-                      onClick={() => navigate("Website Editor")}
+                      onClick={() => setPreview(true)}
                     >
-                      Edit website <ArrowUpRight size={14} />
+                      Preview <ArrowUpRight size={14} />
                     </button>
-                  </div>
-                </div>
-                <div className="overview-right">
-                  <div className="welcome-card">
-                    <span className="eyebrow">
-                      YOUR BUSINESS, BEAUTIFULLY ONLINE
-                    </span>
-                    <h2>
-                      Big heart.
-                      <br />
-                      Beautiful website.
-                    </h2>
-                    <p>
-                      You bring the passion. We’ll help you make it feel right
-                      at home online.
-                    </p>
-                    <button
-                      className="text-button"
-                      onClick={() => navigate("Website Editor")}
-                    >
-                      Make it yours <ArrowRight size={16} />
-                    </button>
-                    <span className="welcome-art">✳</span>
-                  </div>
-                  <div className="quick-stats">
-                    <div>
-                      <span>
-                        <UtensilsCrossed size={17} /> On the menu
-                      </span>
-                      <strong>{data.products.length}</strong>
-                      <small>
-                        {data.products.filter((p) => p.available).length}{" "}
-                        available products
-                      </small>
-                    </div>
-                    <div>
-                      <span>
-                        <Boxes size={17} /> Your collection
-                      </span>
-                      <strong>
-                        {
-                          catalog.filter(
-                            (d) => !d.premium || data.unlocked.includes(d.key),
-                          ).length
-                        }
-                      </strong>
-                      <small>Components ready to use</small>
-                    </div>
                   </div>
                 </div>
               </div>
               <div className="section-heading">
                 <div>
                   <h2>Your next little step</h2>
-                  <p>Everything you need to make your website feel like you.</p>
+                  <p>Manage your website, menu and orders.</p>
                 </div>
                 <span className="subtle">BUILT FOR YOUR BUSINESS</span>
               </div>
@@ -392,24 +347,24 @@ export function Dashboard({
                 {[
                   {
                     icon: PanelsTopLeft,
-                    label: "Make a great first impression",
-                    text: "Find your style. Tell your story. Make every section your own.",
-                    action: "Customize your website",
+                    label: "Update your website",
+                    text: "Edit page content, images and layout.",
+                    action: "Edit pages",
                     target: "Website Editor",
                     color: "sage",
                   },
                   {
                     icon: UtensilsCrossed,
-                    label: "Give them a taste",
-                    text: "Add your signature drinks, fresh bakes, and everyday favorites.",
+                    label: "Manage your menu",
+                    text: "Update products, prices and availability.",
                     action: "Manage your menu",
                     target: "Menu Manager",
                     color: "peach",
                   },
                   {
                     icon: ShoppingBag,
-                    label: "Find your next favorite",
-                    text: "Explore thoughtfully crafted components for a fresh new look.",
+                    label: "Browse components",
+                    text: "Find sections to add to your website.",
                     action: "Browse the store",
                     target: "Component Store",
                     color: "lavender",
@@ -432,11 +387,7 @@ export function Dashboard({
                 ))}
               </div>
               <div className="bottom-note">
-                <Leaf size={16} />
-                <span>
-                  Good things take a little care. Your next chapter starts here.
-                </span>
-                <span>Made with SERVQO ✳</span>
+                <span>SERVQO · Business overview</span>
               </div>
             </>
           )}
@@ -806,7 +757,7 @@ export function Dashboard({
               <PageHeading
                 eyebrow="YOUR BRAND, IN PICTURES"
                 title="A picture of your world."
-                description="Upload JPEG, PNG or WebP images up to 4 MB."
+                description="Upload JPEG, PNG or WebP images up to 4 MB. Files are stored in Supabase Storage (merchant-media)."
               />
               <div className="upload-zone">
                 <Images size={30} />
@@ -832,24 +783,48 @@ export function Dashboard({
                 </label>
               </div>
               <div className="media-grid">
-                {data.media.map((m) => (
-                  <article className="panel" key={m.id}>
-                    <img src={m.url} alt={m.name} />
-                    <b>{m.name}</b>
-                    <button
-                      className="button compact"
-                      onClick={() =>
-                        run(
-                          () => navigator.clipboard.writeText(m.url),
-                          "Image URL copied. Paste it into your section or product image field.",
-                        )
-                      }
-                    >
-                      Copy URL
-                    </button>
-                  </article>
-                ))}
+                {data.media
+                  .filter((m) => !deletedMedia.includes(m.id))
+                  .map((m) => (
+                    <article className="panel" key={m.id}>
+                      <img src={m.url} alt={m.name} />
+                      <b>{m.name}</b>
+                      <div className="media-actions">
+                        <button
+                          className="button compact"
+                          onClick={() =>
+                            run(
+                              () => navigator.clipboard.writeText(m.url),
+                              "Image URL copied. Paste it into your section or product image field.",
+                            )
+                          }
+                        >
+                          Copy URL
+                        </button>
+                        <button
+                          className="button compact media-delete-link"
+                          disabled={!access.allowed}
+                          onClick={() => setDeleteAsset(m)}
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
               </div>
+              {deleteAsset && (
+                <DeleteMediaDialog
+                  merchantId={data.business.id}
+                  asset={deleteAsset}
+                  onClose={() => setDeleteAsset(null)}
+                  onDeleted={() => {
+                    setDeletedMedia((ids) => [...ids, deleteAsset.id]);
+                    setDeleteAsset(null);
+                    setNotice("Image deleted from your library and storage.");
+                    router.refresh();
+                  }}
+                />
+              )}
             </>
           )}
           {tab === "Website Settings" && (

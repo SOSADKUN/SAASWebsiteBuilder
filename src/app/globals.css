@@ -5,6 +5,7 @@
 @import "./servqo-auth.css";
 @import "./product-editor.css";
 @import "./operations.css";
+@import "./dashboard-overview.css";
 .cafe-logo {
   width: 44px;
   height: 44px;

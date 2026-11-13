@@ -215,6 +215,8 @@
   gap: 15px;
 }
 .pos-product {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 13px;
@@ -231,6 +233,9 @@
   border-color: #b0c8b6;
 }
 .pos-product__image {
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
   height: 130px;
   display: flex;
   align-items: center;
@@ -239,6 +244,21 @@
   color: var(--green);
   border-radius: 8px;
   overflow: hidden;
+}
+.pos-product--selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+.pos-product__quantity {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--green);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
 }
 .pos-product__image img {
   width: 100%;
@@ -263,6 +283,8 @@
   font-size: 12px;
   font-weight: 600;
   padding: 0 5px 4px;
+  width: 100%;
+  margin-top: auto;
 }
 .pos-product__price svg {
   background: var(--soft);
@@ -711,6 +733,42 @@
   font-size: 9px;
   margin-top: 4px;
 }
+.order-ticket__cancel .order-ticket__acknowledged {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--green);
+}
+.order-ticket__refund {
+  padding-top: 8px;
+  line-height: 1.5;
+}
+.pos-recent-section .ops-recent,
+.pos-ticket-slider {
+  align-items: stretch;
+}
+.order-ticket--cashier {
+  display: flex;
+  flex-direction: column;
+}
+.order-ticket--cashier > footer {
+  margin-top: auto;
+  min-height: 60px;
+}
+.order-ticket--cashier .order-ticket__cancel {
+  margin: 10px 14px;
+  padding: 9px 10px;
+  font-size: 11px;
+}
+.order-ticket--cashier .order-ticket__cancel > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.order-ticket--cashier .order-ticket__cancel b {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 .order-ticket__ack {
   display: flex;
   align-items: center;
@@ -943,6 +1001,71 @@
   }
   .pos-payment {
     grid-template-columns: 1fr;
+  }
+}
+/* Cashier tiles keep their useful size even when a full-screen catalog is sparse. */
+.pos-screen.operations--fullscreen .ops-heading,
+.pos-screen:fullscreen .ops-heading {
+  margin-bottom: 18px;
+  align-items: center;
+}
+@media (min-width: 1001px) {
+  .pos-screen.operations--fullscreen .pos-workspace,
+  .pos-screen:fullscreen .pos-workspace {
+    grid-template-columns: minmax(0, 1fr) 350px;
+    gap: 20px;
+  }
+  .pos-screen.operations--fullscreen .pos-product-grid,
+  .pos-screen:fullscreen .pos-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .pos-screen.operations--fullscreen .pos-product,
+  .pos-screen:fullscreen .pos-product {
+    border-radius: 10px;
+    padding: 8px;
+  }
+  .pos-screen.operations--fullscreen .pos-product__image,
+  .pos-screen:fullscreen .pos-product__image {
+    height: 112px;
+  }
+  .pos-screen.operations--fullscreen .pos-product__name,
+  .pos-screen:fullscreen .pos-product__name {
+    font-size: 13px;
+    min-height: 36px;
+    margin: 9px 3px 5px;
+  }
+  .pos-screen.operations--fullscreen .pos-product__price,
+  .pos-screen:fullscreen .pos-product__price {
+    font-size: 13px;
+    padding: 0 3px 3px;
+  }
+  .pos-screen.operations--fullscreen .pos-menu-tools,
+  .pos-screen:fullscreen .pos-menu-tools {
+    position: sticky;
+    top: -1px;
+    z-index: 2;
+    background: var(--bg);
+    padding-top: 1px;
+    padding-bottom: 12px;
+  }
+  .pos-screen.operations--fullscreen .pos-search,
+  .pos-screen:fullscreen .pos-search {
+    margin-bottom: 12px;
+  }
+  .pos-screen.operations--fullscreen .pos-categories,
+  .pos-screen:fullscreen .pos-categories {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-bottom: 0;
+    padding: 2px 1px 6px;
+  }
+  .pos-screen.operations--fullscreen .pos-categories > button,
+  .pos-screen:fullscreen .pos-categories > button {
+    flex-shrink: 0;
+    min-height: 42px;
+    font-size: 12px;
+    padding: 10px 16px;
   }
 }
 /* Dense operational queue: keep every item and note readable, with less chrome. */
