@@ -9,6 +9,7 @@ import {
 } from "@/lib/workspace-errors";
 import { db } from "@/db";
 import { workspaceTrace } from "@/lib/workspace-diagnostics";
+import { productErrorMessage } from "@/lib/product-errors";
 import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
@@ -276,28 +277,62 @@ export async function saveProduct(
   merchantId: string,
   input: z.infer<typeof productSchema>,
 ) {
-  await authorize(z.uuid().parse(merchantId), "menu:manage");
-  await requireSubscription(merchantId);
+  const trace = workspaceTrace("menu.product.save");
+  await trace.step("save", () => saveProductRecord(merchantId, input, trace));
+}
+export async function saveMenuProduct(
+  merchantId: string,
+  input: z.infer<typeof productSchema>,
+): Promise<{ ok: true } | { ok: false; error: string; reference: string }> {
+  const trace = workspaceTrace("menu.product.save");
+  try {
+    await trace.step("save", () => saveProductRecord(merchantId, input, trace));
+    return { ok: true };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      ok: false,
+      error: productErrorMessage(error),
+      reference: trace.reference,
+    };
+  }
+}
+async function saveProductRecord(
+  merchantId: string,
+  input: z.infer<typeof productSchema>,
+  trace: ReturnType<typeof workspaceTrace>,
+) {
+  await trace.step("authorization", () =>
+    authorize(z.uuid().parse(merchantId), "menu:manage"),
+  );
+  await trace.step("subscription", () => requireSubscription(merchantId));
   const value = productSchema.parse(input);
   const database = db();
-  const category = await database.query.categories.findFirst({
-    where: and(
-      eq(s.categories.id, value.categoryId),
-      eq(s.categories.merchantId, merchantId),
-    ),
-  });
+  const category = await trace.step("category", () =>
+    database.query.categories.findFirst({
+      where: and(
+        eq(s.categories.id, value.categoryId),
+        eq(s.categories.merchantId, merchantId),
+      ),
+    }),
+  );
   if (!category) throw new Error("Invalid category");
-  if (value.id) {
-    const rows = await database
-      .update(s.products)
-      .set({ ...value, updatedAt: new Date() })
-      .where(
-        and(eq(s.products.id, value.id), eq(s.products.merchantId, merchantId)),
-      )
-      .returning();
-    if (!rows.length) throw new Error("Product not found");
-  } else await database.insert(s.products).values({ ...value, merchantId });
-  revalidatePath("/dashboard");
+  await trace.step("product_write", async () => {
+    if (value.id) {
+      const rows = await database
+        .update(s.products)
+        .set(value)
+        .where(
+          and(
+            eq(s.products.id, value.id),
+            eq(s.products.merchantId, merchantId),
+          ),
+        )
+        .returning();
+      if (!rows.length) throw new Error("Product not found");
+    } else await database.insert(s.products).values({ ...value, merchantId });
+  });
+  await trace.step("revalidation", async () => revalidatePath("/dashboard"));
 }
 export async function deleteProduct(merchantId: string, id: string) {
   await authorize(merchantId, "menu:manage");

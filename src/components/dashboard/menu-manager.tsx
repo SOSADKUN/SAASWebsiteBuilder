@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, Search, Coffee, X } from "lucide-react";
 import type { DashboardData as Data } from "./types";
 import type { Product } from "@/lib/models";
 import {
-  saveProduct,
+  saveMenuProduct,
   deleteProduct,
   saveCategory,
   deleteCategory,
@@ -20,10 +20,22 @@ export function MenuManager({
   pending: boolean;
 }) {
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
+  const [productError, setProductError] = useState<{
+    error: string;
+    reference: string;
+  } | null>(null);
   const [filter, setFilter] = useState("all");
   const [categoryName, setCategoryName] = useState("");
   const [categoryEdit, setCategoryEdit] = useState<string | undefined>();
   const [search, setSearch] = useState("");
+  async function persistProduct(input: Parameters<typeof saveMenuProduct>[1]) {
+    const result = await saveMenuProduct(data.business.id, input);
+    if (!result.ok) {
+      setProductError(result);
+      // The shared runner must not show a success notice or refresh on failure.
+      throw new Error(`${result.error} Support reference: ${result.reference}`);
+    }
+  }
   return (
     <>
       <div className="page-heading">
@@ -34,13 +46,14 @@ export function MenuManager({
         </div>
         <button
           className="button primary"
-          onClick={() =>
+          onClick={() => {
+            setProductError(null);
             setEditing({
               categoryId: data.categories[0]?.id,
               available: true,
               position: data.products.length,
-            })
-          }
+            });
+          }}
         >
           <Plus size={16} /> Add product
         </button>
@@ -173,7 +186,7 @@ export function MenuManager({
                           onClick={() =>
                             run(
                               () =>
-                                saveProduct(data.business.id, {
+                                persistProduct({
                                   ...p,
                                   available: !p.available,
                                 }),
@@ -190,7 +203,10 @@ export function MenuManager({
                         <button
                           className="icon-button"
                           aria-label={`Edit ${p.name}`}
-                          onClick={() => setEditing(p)}
+                          onClick={() => {
+                            setProductError(null);
+                            setEditing(p);
+                          }}
                         >
                           <Pencil size={15} />
                         </button>
@@ -240,22 +256,36 @@ export function MenuManager({
               </button>
             </div>
             <form
-              action={(form) => {
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                setProductError(null);
+                // Capture the values before starting the async action. Using a
+                // submit handler retains the form values when saving fails.
+                const input = {
+                  id: editing.id,
+                  name: String(form.get("name")),
+                  description: String(form.get("description")),
+                  price: Math.round(Number(form.get("price")) * 100),
+                  image: String(form.get("image")),
+                  categoryId: String(form.get("categoryId")),
+                  available: form.get("available") === "on",
+                  position: Number(form.get("position")),
+                };
                 run(async () => {
-                  await saveProduct(data.business.id, {
-                    id: editing.id,
-                    name: String(form.get("name")),
-                    description: String(form.get("description")),
-                    price: Math.round(Number(form.get("price")) * 100),
-                    image: String(form.get("image")),
-                    categoryId: String(form.get("categoryId")),
-                    available: form.get("available") === "on",
-                    position: Number(form.get("position")),
-                  });
+                  await persistProduct(input);
                   setEditing(null);
                 }, "Product saved.");
               }}
             >
+              {productError && (
+                <p className="notice error" role="alert">
+                  {productError.error}
+                  <span className="workspace-reference">
+                    Support reference: {productError.reference}
+                  </span>
+                </p>
+              )}
               <label>
                 Product name
                 <input

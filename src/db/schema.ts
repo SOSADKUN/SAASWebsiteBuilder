@@ -178,7 +178,6 @@ export const products = pgTable(
     available: boolean("available").notNull().default(true),
     position: integer("position").notNull().default(0),
     createdAt: created(),
-    updatedAt: created(),
   },
   (t) => [
     index("product_merchant").on(t.merchantId),
