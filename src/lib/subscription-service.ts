@@ -14,8 +14,9 @@ import {
 // Caller must authorize membership before using this internal tenant loader.
 export async function subscriptionSnapshot(
   merchantId: string,
+  database: Pick<ReturnType<typeof db>, "select"> = db(),
 ): Promise<SubscriptionSnapshot> {
-  const [row] = await db()
+  const [row] = await database
     .select({
       serverNow: sql<string>`CURRENT_TIMESTAMP::text`,
       trialStartedAt: merchants.trialStartedAt,
@@ -50,8 +51,11 @@ export async function subscriptionSnapshot(
     verificationSource: row.subscription.verificationSource,
   };
 }
-export async function requireSubscription(merchantId: string) {
-  const snapshot = await subscriptionSnapshot(merchantId);
+export async function requireSubscription(
+  merchantId: string,
+  database?: Pick<ReturnType<typeof db>, "select">,
+) {
+  const snapshot = await subscriptionSnapshot(merchantId, database);
   if (!subscriptionAccess(snapshot).allowed)
     throw new Error(
       "Subscription required: your trial has ended. View Subscription & Billing to continue. Your data remains available for viewing and export.",

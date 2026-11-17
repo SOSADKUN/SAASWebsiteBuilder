@@ -70,7 +70,7 @@ describe("merchant navigation boundaries", () => {
       ]),
     ).toBe(false);
   });
-  it("renders active, collapsible navigation and clearly disabled future items", () => {
+  it("renders active navigation with owner-only System Services management", () => {
     const html = renderToStaticMarkup(
       <MerchantSidebar
         businessName="Merchant Café"
@@ -87,8 +87,9 @@ describe("merchant navigation boundaries", () => {
     expect(html).toContain("Merchant Café");
     expect(html).toContain('aria-current="page"');
     expect(html).toContain("<details");
-    expect(html).toContain("Coming soon");
-    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain("Coming soon");
+    expect(html).toContain("SYSTEM SERVICES");
+    expect(html).toContain('aria-label="Add System Services"');
     expect(html).toContain('href="/dashboard/pos"');
     expect(html).toContain('href="/dashboard/orders"');
     expect(html).not.toContain("Category Management");

@@ -28,6 +28,14 @@ export const merchants = pgTable(
   {
     id: id(),
     businessType: text("business_type").notNull().default("cafe"),
+    onboardingStep: text("onboarding_step")
+      .$type<"business_type" | "services" | "review" | "complete">()
+      .notNull()
+      .default("complete"),
+    onboardingServices: jsonb("onboarding_services")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
     description: text("description").notNull().default(""),
@@ -46,6 +54,10 @@ export const merchants = pgTable(
     check(
       "merchant_business_type_valid",
       sql`${t.businessType} IN ('cafe','bakery','nail_salon','hair_salon','beauty_studio','other')`,
+    ),
+    check(
+      "merchant_onboarding_step_valid",
+      sql`${t.onboardingStep} IN ('business_type','services','review','complete')`,
     ),
   ],
 );
@@ -475,7 +487,11 @@ export const moduleDefinitions = pgTable("business_module_definitions", {
   key: text("key").primaryKey(),
   available: boolean("available").notNull().default(false),
   pricing: jsonb("pricing")
-    .$type<{ mode: "included" | "demo"; monthlyExample?: number }>()
+    .$type<{
+      mode: "included" | "demo";
+      monthlyExample?: number;
+      currency?: "MYR";
+    }>()
     .notNull()
     .default({ mode: "demo" }),
 });

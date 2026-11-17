@@ -39,7 +39,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 import * as schema from "../src/db/schema";
 import { authorize } from "../src/lib/auth";
-import { configureModule, setBusinessType } from "../src/server/module-actions";
+import {
+  configureModule,
+  configureSystemService,
+  setBusinessType,
+} from "../src/server/module-actions";
+import { startBusinessSetup } from "../src/server/actions";
+import { saveBusinessSetup } from "../src/server/onboarding-actions";
 import { merchantModuleState } from "../src/server/module-service";
 import { dashboardData } from "../src/server/queries";
 import { initialLayout } from "../src/lib/models";
@@ -253,6 +259,12 @@ describe("module migration and real authorization", () => {
     await expect(authorize(merchant, "orders:manage")).resolves.toBeTruthy();
   });
   it("supports owner configuration without granting licenses or changing other tenants", async () => {
+    expect(await configureModule(merchant, "kitchen_queue", false)).toEqual({
+      ok: true,
+    });
+    expect(await configureModule(merchant, "fnb_orders", false)).toEqual({
+      ok: true,
+    });
     expect(await configureModule(merchant, "pos", false)).toEqual({ ok: true });
     await expect(authorize(merchant, "pos:operate")).rejects.toThrow(
       "Business module",
@@ -452,5 +464,405 @@ describe("module migration and real authorization", () => {
     await browser(editor, async () => {
       expect((await database.query("SELECT * FROM pages")).rows).toEqual([]);
     });
+  });
+});
+
+async function freshSetup() {
+  const actor = crypto.randomUUID();
+  login(actor);
+  const form = new FormData();
+  form.set("ownerName", "Business Owner");
+  form.set("name", "Setup business");
+  form.set("slug", "setup-" + actor);
+  const result = await startBusinessSetup(form);
+  if (!result.ok) throw new Error(result.error);
+  return { actor, form, id: result.merchantId };
+}
+async function setupRow(id: string) {
+  return (
+    await database.query<{
+      onboarding_step: string;
+      onboarding_services: string[];
+      trial_started_at: Date;
+      trial_ends_at: Date;
+      business_type: string;
+    }>(
+      "SELECT onboarding_step,onboarding_services,trial_started_at,trial_ends_at,business_type FROM merchants WHERE id=$1",
+      [id],
+    )
+  ).rows[0];
+}
+describe("resumable System Services onboarding", () => {
+  it("cannot turn a database-disabled implementation into an enabled service", async () => {
+    const setup = await freshSetup();
+    await saveBusinessSetup(setup.id, {
+      step: "business_type",
+      businessType: "cafe",
+    });
+    await database.query(
+      "UPDATE business_module_definitions SET available=false WHERE key='pos'",
+    );
+    try {
+      expect(
+        await saveBusinessSetup(setup.id, {
+          step: "services",
+          services: ["catalog", "pos"],
+        }),
+      ).toMatchObject({ ok: false });
+      expect(
+        (await merchantModuleState(setup.id)).find((m) => m.key === "pos")
+          ?.enabled,
+      ).toBe(false);
+    } finally {
+      await database.query(
+        "UPDATE business_module_definitions SET available=true WHERE key='pos'",
+      );
+    }
+  });
+  it("creates business details once, saves the owner name and keeps optional modules inactive", async () => {
+    const setup = await freshSetup();
+    const before = await setupRow(setup.id);
+    expect(before.onboarding_step).toBe("business_type");
+    expect(
+      (await merchantModuleState(setup.id))
+        .filter((m) => m.enabled)
+        .map((m) => m.key)
+        .sort(),
+    ).toEqual(["business", "overview", "settings"]);
+    expect(
+      (
+        await database.query("SELECT name FROM user_profiles WHERE id=$1", [
+          setup.actor,
+        ])
+      ).rows[0],
+    ).toMatchObject({ name: "Business Owner" });
+    const replay = await startBusinessSetup(setup.form);
+    expect(replay).toEqual({ ok: true, merchantId: setup.id });
+    expect(await setupRow(setup.id)).toEqual(before);
+    expect(
+      (
+        await database.query("SELECT * FROM merchant_users WHERE user_id=$1", [
+          setup.actor,
+        ])
+      ).rows,
+    ).toHaveLength(1);
+    expect(await configureSystemService(setup.id, "pos", true)).toMatchObject({
+      ok: false,
+    });
+    await expect(authorize(setup.id, "pos:operate")).rejects.toThrow(
+      "Business module",
+    );
+  });
+  it("serializes repeated first submissions into one merchant and one immutable trial claim", async () => {
+    const actor = crypto.randomUUID();
+    login(actor);
+    const form = new FormData();
+    form.set("ownerName", "Owner");
+    form.set("name", "Concurrent setup");
+    form.set("slug", "retry-" + actor);
+    const results = await Promise.all([
+      startBusinessSetup(form),
+      startBusinessSetup(form),
+    ]);
+    expect(results[0]).toEqual(results[1]);
+    expect(results[0].ok).toBe(true);
+    expect(
+      (
+        await database.query(
+          "SELECT * FROM merchant_trial_claims WHERE user_id=$1",
+          [actor],
+        )
+      ).rows,
+    ).toHaveLength(1);
+    expect(
+      (
+        await database.query("SELECT * FROM merchant_users WHERE user_id=$1", [
+          actor,
+        ])
+      ).rows,
+    ).toHaveLength(1);
+  });
+  it("saves type and selection progress and resumes without loading builder datasets", async () => {
+    const setup = await freshSetup();
+    const before = await setupRow(setup.id);
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "business_type",
+        businessType: "bakery",
+      }),
+    ).toEqual({ ok: true });
+    expect((await setupRow(setup.id)).onboarding_services).toContain("orders");
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "service_draft",
+        services: ["website", "media", "catalog"],
+      }),
+    ).toEqual({ ok: true });
+    const context = await dashboardData();
+    expect(context?.business.onboardingStep).toBe("services");
+    expect(context?.business.onboardingServices).toEqual([
+      "website",
+      "media",
+      "catalog",
+    ]);
+    expect(context?.pages).toEqual([]);
+    expect(context?.ownerName).toBe("Business Owner");
+    const after = await setupRow(setup.id);
+    expect(after.trial_started_at).toEqual(before.trial_started_at);
+    expect(after.trial_ends_at).toEqual(before.trial_ends_at);
+    expect(
+      await saveBusinessSetup(setup.id, { step: "complete" }),
+    ).toMatchObject({ ok: false });
+  });
+  it("finishes with selected included tools and no paid modules without restarting the trial", async () => {
+    const setup = await freshSetup();
+    const before = await setupRow(setup.id);
+    await saveBusinessSetup(setup.id, {
+      step: "business_type",
+      businessType: "hair_salon",
+    });
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "services",
+        services: ["website", "media", "catalog"],
+      }),
+    ).toEqual({ ok: true });
+    expect(await saveBusinessSetup(setup.id, { step: "complete" })).toEqual({
+      ok: true,
+    });
+    const context = await dashboardData();
+    expect(context?.business.onboardingStep).toBe("complete");
+    expect(context?.pages).toHaveLength(1);
+    expect(context?.modules.find((m) => m.key === "pos")?.enabled).toBe(false);
+    expect(context?.modules.find((m) => m.key === "website")?.enabled).toBe(
+      true,
+    );
+    expect(context?.subscription.status).toBe("trialing");
+    expect(await saveBusinessSetup(setup.id, { step: "complete" })).toEqual({
+      ok: true,
+    });
+    expect(await startBusinessSetup(setup.form)).toEqual({
+      ok: true,
+      merchantId: setup.id,
+    });
+    const after = await setupRow(setup.id);
+    expect(after.trial_started_at).toEqual(before.trial_started_at);
+    expect(after.trial_ends_at).toEqual(before.trial_ends_at);
+  });
+  it("allows core-only onboarding with every optional service deselected", async () => {
+    const setup = await freshSetup();
+    await saveBusinessSetup(setup.id, {
+      step: "business_type",
+      businessType: "other",
+    });
+    expect(
+      await saveBusinessSetup(setup.id, { step: "services", services: [] }),
+    ).toEqual({ ok: true });
+    expect(await saveBusinessSetup(setup.id, { step: "complete" })).toEqual({
+      ok: true,
+    });
+    expect(
+      (await merchantModuleState(setup.id))
+        .filter((m) => m.enabled)
+        .map((m) => m.key)
+        .sort(),
+    ).toEqual(["business", "overview", "settings"]);
+    expect((await dashboardData())?.business.onboardingStep).toBe("complete");
+    await expect(authorize(setup.id, "data:export")).resolves.toBeTruthy();
+  });
+  it("rejects future, missing-source and revoked-license selections on the server", async () => {
+    const setup = await freshSetup();
+    await saveBusinessSetup(setup.id, {
+      step: "business_type",
+      businessType: "cafe",
+    });
+    for (const services of [
+      ["appointments"],
+      ["cake_preorders"],
+      ["orders", "catalog"],
+      ["fake-service"],
+    ])
+      expect(
+        await saveBusinessSetup(setup.id, { step: "services", services }),
+      ).toMatchObject({ ok: false });
+    await database.query(
+      "UPDATE business_module_entitlements SET expires_at=now()-interval '1 second' WHERE merchant_id=$1 AND module_key='pos'",
+      [setup.id],
+    );
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "services",
+        services: ["catalog", "pos"],
+      }),
+    ).toMatchObject({ ok: false });
+    expect(
+      (await merchantModuleState(setup.id)).find((m) => m.key === "pos")
+        ?.enabled,
+    ).toBe(false);
+    expect(
+      (
+        await database.query(
+          "SELECT * FROM business_module_entitlements WHERE merchant_id=$1 AND module_key='appointments'",
+          [setup.id],
+        )
+      ).rows,
+    ).toEqual([]);
+  });
+  it("rechecks licenses at final confirmation instead of trusting a saved checkbox", async () => {
+    const setup = await freshSetup();
+    await saveBusinessSetup(setup.id, {
+      step: "business_type",
+      businessType: "cafe",
+    });
+    await saveBusinessSetup(setup.id, {
+      step: "services",
+      services: ["catalog", "pos"],
+    });
+    await database.query(
+      "UPDATE business_module_entitlements SET expires_at=now()-interval '1 second' WHERE merchant_id=$1 AND module_key='pos'",
+      [setup.id],
+    );
+    expect(
+      await saveBusinessSetup(setup.id, { step: "complete" }),
+    ).toMatchObject({ ok: false });
+    expect((await setupRow(setup.id)).onboarding_step).toBe("review");
+    expect(
+      (await merchantModuleState(setup.id)).find((m) => m.key === "pos")
+        ?.enabled,
+    ).toBe(false);
+  });
+  it("denies foreign-tenant and non-owner onboarding and service changes", async () => {
+    const setup = await freshSetup();
+    login(owner);
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "business_type",
+        businessType: "bakery",
+      }),
+    ).toMatchObject({ ok: false });
+    expect(await configureSystemService(setup.id, "pos", true)).toMatchObject({
+      ok: false,
+    });
+    login(cashier);
+    expect(await configureSystemService(merchant, "pos", true)).toMatchObject({
+      ok: false,
+    });
+    expect((await setupRow(setup.id)).business_type).toBe("cafe");
+  });
+  it("does not make an expired trial writable through onboarding, while allowing core-only completion", async () => {
+    const id = crypto.randomUUID();
+    await database.query(
+      "INSERT INTO merchants(id,name,slug,onboarding_step,trial_started_at,trial_ends_at) VALUES($1,'Expired setup',$2,'services',now()-interval '20 days',now()-interval '6 days')",
+      [id, "expired-" + id],
+    );
+    await database.query(
+      "INSERT INTO merchant_users(merchant_id,user_id,role) VALUES($1,$2,'owner')",
+      [id, owner],
+    );
+    await database.query(
+      "UPDATE merchant_modules SET enabled=false WHERE merchant_id=$1 AND module_key NOT IN ('overview','business','settings')",
+      [id],
+    );
+    const before = await setupRow(id);
+    await saveBusinessSetup(id, {
+      step: "services",
+      services: ["catalog", "pos"],
+    });
+    expect(await saveBusinessSetup(id, { step: "complete" })).toMatchObject({
+      ok: false,
+    });
+    await saveBusinessSetup(id, { step: "services", services: [] });
+    expect(await saveBusinessSetup(id, { step: "complete" })).toEqual({
+      ok: true,
+    });
+    expect((await setupRow(id)).trial_ends_at).toEqual(before.trial_ends_at);
+    await expect(authorize(id, "data:export")).resolves.toBeTruthy();
+  });
+  it("requires operational-data confirmation and preserves tickets through disable/reactivation", async () => {
+    const setup = await freshSetup();
+    const before = await setupRow(setup.id);
+    await saveBusinessSetup(setup.id, {
+      step: "business_type",
+      businessType: "cafe",
+    });
+    await saveBusinessSetup(setup.id, {
+      step: "services",
+      services: ["catalog", "pos", "orders"],
+    });
+    await saveBusinessSetup(setup.id, { step: "complete" });
+    const categoryId = (
+      await database.query<{ id: string }>(
+        "SELECT id FROM menu_categories WHERE merchant_id=$1 LIMIT 1",
+        [setup.id],
+      )
+    ).rows[0].id;
+    const productId = crypto.randomUUID();
+    await database.query(
+      "INSERT INTO menu_products(id,merchant_id,category_id,name,description,price) VALUES($1,$2,$3,'Product','',1000)",
+      [productId, setup.id, categoryId],
+    );
+    const ticket = await createPosOrder(setup.id, {
+      requestId: crypto.randomUUID(),
+      items: [{ productId, quantity: 1, expectedPrice: 1000 }],
+      fulfillment: "takeaway",
+      tableLabel: "",
+      note: "",
+      payment: "cash",
+      cashReceived: 1000,
+    });
+    expect(
+      await configureSystemService(setup.id, "pos", false, true),
+    ).toMatchObject({ ok: false });
+    expect(
+      await configureSystemService(setup.id, "orders", false),
+    ).toMatchObject({ ok: false, confirmationRequired: true });
+    expect(
+      (await merchantModuleState(setup.id)).find(
+        (m) => m.key === "kitchen_queue",
+      )?.enabled,
+    ).toBe(true);
+    expect(
+      await configureSystemService(setup.id, "orders", false, true),
+    ).toEqual({ ok: true });
+    expect(await configureSystemService(setup.id, "pos", false)).toMatchObject({
+      confirmationRequired: true,
+    });
+    expect(await configureSystemService(setup.id, "pos", false, true)).toEqual({
+      ok: true,
+    });
+    expect(
+      (
+        await database.query("SELECT id,status FROM pos_orders WHERE id=$1", [
+          ticket.orderId,
+        ])
+      ).rows[0],
+    ).toMatchObject({ id: ticket.orderId, status: "pending" });
+    expect(await configureSystemService(setup.id, "orders", true)).toEqual({
+      ok: true,
+    });
+    expect(
+      (await operationsSnapshot(setup.id)).orders.find(
+        (o) => o.id === ticket.orderId,
+      ),
+    ).toBeTruthy();
+    expect((await setupRow(setup.id)).trial_ends_at).toEqual(
+      before.trial_ends_at,
+    );
+  });
+  it("retains existing completed merchants and legacy source-less queue access", async () => {
+    expect((await setupRow(merchant)).onboarding_step).toBe("complete");
+    await database.query(
+      "UPDATE merchant_modules SET enabled=false WHERE merchant_id=$1 AND module_key='pos'",
+      [merchant],
+    );
+    await expect(authorize(merchant, "orders:manage")).resolves.toBeTruthy();
+    expect(
+      (
+        await database.query(
+          "SELECT source FROM merchant_entitlements WHERE merchant_id=$1",
+          [merchant],
+        )
+      ).rows[0],
+    ).toMatchObject({ source: "demo" });
   });
 });

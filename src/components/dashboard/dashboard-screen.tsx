@@ -43,6 +43,37 @@ export async function DashboardScreen({
       </main>
     );
   }
+  if (
+    data?.business.onboardingStep &&
+    data.business.onboardingStep !== "complete"
+  ) {
+    if (!data.navigationCapabilities.includes("modules:manage"))
+      return (
+        <main className="servqo-result-page">
+          <Brand />
+          <section className="servqo-result-card">
+            <h1>Business setup is in progress</h1>
+            <p>Ask the owner to finish setting up this workspace.</p>
+          </section>
+        </main>
+      );
+    return (
+      <WorkspaceOnboarding
+        key={data.business.id + data.business.onboardingStep}
+        setup={{
+          merchantId: data.business.id,
+          name: data.business.name,
+          slug: data.business.slug,
+          ownerName: data.ownerName,
+          type: data.businessType,
+          step: data.business.onboardingStep,
+          selected: data.business.onboardingServices,
+          modules: data.modules,
+          subscription: data.subscription,
+        }}
+      />
+    );
+  }
   return data ? (
     <Dashboard
       key={initialTab ?? "Overview"}

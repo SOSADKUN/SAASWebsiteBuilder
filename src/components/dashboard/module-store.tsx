@@ -1,15 +1,69 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  businessModules,
   businessTypes,
-  moduleAccess,
   type BusinessType,
   type ModuleState,
 } from "@/lib/business-modules";
-import { configureModule, setBusinessType } from "@/server/module-actions";
-
+import {
+  selectedServices,
+  estimatedMonthly,
+  formatServicePrice,
+  addService,
+  systemServices,
+} from "@/lib/system-services";
+import {
+  configureSystemService,
+  setBusinessType,
+} from "@/server/module-actions";
+import { SystemServicePicker } from "./system-service-picker";
+function DisableConfirmation({
+  name,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      className="media-delete-dialog service-confirm-dialog"
+      aria-labelledby="disable-service-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!pending) onCancel();
+      }}
+    >
+      <h2 id="disable-service-title">Disable {name}?</h2>
+      <p>
+        This service contains business records. Its screens will be hidden and
+        new operations will stop. Your records will stay saved for reactivation
+        and export.
+      </p>
+      <div>
+        <button className="button" disabled={pending} onClick={onCancel}>
+          Keep service
+        </button>
+        <button
+          className="button primary"
+          disabled={pending}
+          onClick={onConfirm}
+        >
+          {pending ? "Updating..." : "Disable service"}
+        </button>
+      </div>
+    </dialog>
+  );
+}
 export function ModuleStore({
   merchantId,
   type,
@@ -24,47 +78,86 @@ export function ModuleStore({
   canWrite: boolean;
 }) {
   const [message, setMessage] = useState("");
+  const [confirmation, setConfirmation] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  function run(
-    action: () => Promise<{ ok: boolean; error?: string; reference?: string }>,
-  ) {
+  const selected = selectedServices(modules);
+  function toggle(key: string, enabled: boolean, confirmed = false) {
     startTransition(async () => {
       setMessage("");
       try {
-        const result = await action();
-        setMessage(
-          result.ok
-            ? "Settings updated."
-            : `${result.error} Reference: ${result.reference}`,
+        const result = await configureSystemService(
+          merchantId,
+          key,
+          enabled,
+          confirmed,
         );
-        if (result.ok) router.refresh();
+        if (!result.ok) {
+          if (result.confirmationRequired) setConfirmation(key);
+          else {
+            setConfirmation(null);
+            setMessage(`${result.error} Reference: ${result.reference}`);
+          }
+          return;
+        }
+        setConfirmation(null);
+        const next = enabled
+          ? addService(selected, key)
+          : selected.filter((k) => k !== key);
+        setMessage(
+          `Services updated. Projected monthly services: ${formatServicePrice(estimatedMonthly(next))}. No payment was collected.`,
+        );
+        router.refresh();
       } catch {
         setMessage(
-          "Could not confirm the update. Reload to check your settings.",
+          "Could not confirm the update. Reload to check your saved services.",
         );
       }
     });
   }
   return (
-    <section className="module-store">
+    <section className="module-store" aria-busy={pending}>
       <div className="page-heading">
         <div>
-          <h1>Business Modules</h1>
+          <h1>System Services</h1>
           <p>
-            Choose the tools your business uses. Payments are not connected.
+            Add the tools you need. Your saved records stay yours when a service
+            is disabled.
           </p>
         </div>
       </div>
-      <div className="panel">
+      <div className="services-management-summary">
+        <div>
+          <small>ESTIMATED MONTHLY SERVICES</small>
+          <strong>
+            {formatServicePrice(estimatedMonthly(selected))}
+            <small>/month</small>
+          </strong>
+          <p>
+            Demo pricing. No automatic charges or real subscription purchase.
+          </p>
+        </div>
         <label>
           Business type
           <select
             value={type}
             disabled={!canConfigure || pending}
-            onChange={(event) =>
-              run(() => setBusinessType(merchantId, event.target.value))
-            }
+            onChange={(event) => {
+              const value = event.target.value;
+              startTransition(async () => {
+                try {
+                  const result = await setBusinessType(merchantId, value);
+                  setMessage(
+                    result.ok
+                      ? "Recommendations updated. Your services and trial dates have not changed."
+                      : result.error,
+                  );
+                  if (result.ok) router.refresh();
+                } catch {
+                  setMessage("Business type could not be updated.");
+                }
+              });
+            }}
           >
             {Object.entries(businessTypes).map(([key, label]) => (
               <option key={key} value={key}>
@@ -72,89 +165,50 @@ export function ModuleStore({
               </option>
             ))}
           </select>
+          <small>Changes recommendations, not your enabled services.</small>
         </label>
-        <p>
-          Business type changes recommendations only. It does not reset content
-          or switch your modules.
-        </p>
-        <p>
-          Website designs are previewed and unlocked in Website Editor. Business
-          modules use separate licenses.
-        </p>
       </div>
+      <p className="notice">
+        Dashboard, business profile and settings remain available.
+        Website/catalog tools are shown as included in this price preview;
+        current trial/subscription editing restrictions remain. A permanent Free
+        Plan and real billing are not available yet.
+      </p>
+      {!canWrite && (
+        <p className="notice">
+          Service changes require an active trial or verified subscription.
+          Existing data remains saved.
+        </p>
+      )}
       {message && (
         <p className="notice" role="status">
           {message}
         </p>
       )}
-      <div className="admin-grid">
-        {businessModules.map((definition) => {
-          const status = moduleAccess(definition.key, modules);
-          const state = modules.find((m) => m.key === definition.key);
-          const available = definition.availability === "implemented";
-          return (
-            <article className="panel" key={definition.key}>
-              <small>
-                {definition.category.toUpperCase()}
-                {definition.suggestedTypes.includes(type)
-                  ? " · Recommended"
-                  : ""}
-              </small>
-              <h2>{definition.name}</h2>
-              <p>{definition.description}</p>
-              <span className="pill">{status.replaceAll("_", " ")}</span>
-              <p>
-                {available
-                  ? "Included with your SERVQO subscription"
-                  : `Coming soon · example RM ${((definition.demoMonthlyPrice ?? 0) / 100).toFixed(2)}/month · demo pricing only`}
-              </p>
-              {definition.dependencies.length > 0 && (
-                <small>
-                  Requires:{" "}
-                  {definition.dependencies
-                    .map(
-                      (key) =>
-                        businessModules.find((m) => m.key === key)?.name ?? key,
-                    )
-                    .join(", ")}
-                </small>
-              )}
-              <p>
-                <button
-                  className="button compact"
-                  disabled={
-                    !canConfigure ||
-                    !canWrite ||
-                    pending ||
-                    !available ||
-                    !definition.optional ||
-                    !state?.entitled ||
-                    status === "expired" ||
-                    status === "not_entitled"
-                  }
-                  onClick={() =>
-                    run(() =>
-                      configureModule(
-                        merchantId,
-                        definition.key,
-                        !state?.enabled,
-                      ),
-                    )
-                  }
-                >
-                  {!available
-                    ? "Coming soon"
-                    : !definition.optional
-                      ? "Core module"
-                      : state?.enabled
-                        ? "Disable"
-                        : "Enable"}
-                </button>
-              </p>
-            </article>
-          );
-        })}
-      </div>
+      {pending && (
+        <p className="notice" role="status">
+          Updating services...
+        </p>
+      )}
+      <SystemServicePicker
+        type={type}
+        selected={selected}
+        modules={modules}
+        disabled={!canConfigure || !canWrite || pending}
+        management
+        onToggle={toggle}
+      />
+      {confirmation && (
+        <DisableConfirmation
+          name={
+            systemServices.find((s) => s.key === confirmation)?.name ??
+            "this service"
+          }
+          pending={pending}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => toggle(confirmation, false, true)}
+        />
+      )}
     </section>
   );
 }

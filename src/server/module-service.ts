@@ -37,6 +37,7 @@ export async function merchantModuleState(
     .where(eq(s.merchantModules.merchantId, merchantId));
   return rows.map((row) => ({
     key: row.key,
+    available: row.available,
     enabled: row.enabled && row.available,
     entitled: !!row.licenseId,
     expiresAt: row.expired

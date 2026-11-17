@@ -15,6 +15,7 @@ import {
   LogOut,
   X,
   Coffee,
+  Plus,
 } from "lucide-react";
 import {
   isNavigationVisible,
@@ -68,6 +69,12 @@ export function MerchantSidebar({
   modules,
 }: Props) {
   const navigation = merchantNavigation(businessType, modules);
+  const services = navigation.primary.filter(
+    (item) =>
+      item.id !== "overview" &&
+      !item.comingSoon &&
+      isNavigationVisible(item, capabilities),
+  );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     website: true,
   });
@@ -210,24 +217,31 @@ export function MerchantSidebar({
           <span className="nav-label">YOUR BUSINESS</span>
           <nav aria-label="Main navigation">
             <div className="primary-platform-nav">
-              {navigation.primary.map((item) =>
-                item.comingSoon ? (
-                  <div
-                    key={item.id}
-                    className="platform-nav-item unavailable"
-                    aria-disabled="true"
+              {navigation.primary
+                .filter((item) => item.id === "overview")
+                .map((item) => itemLink(item))}
+            </div>
+            <div className="system-services-nav">
+              <div className="services-nav-heading">
+                <span>SYSTEM SERVICES</span>
+                {capabilities.includes("modules:manage") && (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Add System Services"
+                    title="Add System Services"
+                    onClick={() => onNavigate("Business Modules")}
                   >
-                    {item.id === "pos" ? (
-                      <Monitor size={17} />
-                    ) : (
-                      <ClipboardList size={17} />
-                    )}
-                    <span>{item.label}</span>
-                    <small>Coming soon</small>
-                  </div>
-                ) : (
-                  itemLink(item)
-                ),
+                    <Plus size={17} />
+                  </button>
+                )}
+              </div>
+              {services.map((item) => itemLink(item))}
+              {!services.length && (
+                <p className="services-nav-empty">
+                  No optional System Services enabled. Choose services when you
+                  need them.
+                </p>
               )}
             </div>
             {navigation.groups.map((group) => {

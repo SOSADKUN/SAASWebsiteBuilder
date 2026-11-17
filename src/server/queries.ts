@@ -26,7 +26,13 @@ export async function dashboardData(
   const data = await trace.step("load", () =>
     loadDashboardData(requiredCapability, trace, view),
   );
-  trace.ready(data ? "dashboard" : "onboarding");
+  trace.ready(
+    data &&
+      (!data.business.onboardingStep ||
+        data.business.onboardingStep === "complete")
+      ? "dashboard"
+      : "onboarding",
+  );
   return data;
 }
 export async function loadMerchantContext(
@@ -63,12 +69,6 @@ export async function loadMerchantContext(
     destination?.moduleKey,
     requiredCapability && capabilityModules[requiredCapability],
   ];
-  if (
-    requiredModules.some(
-      (key) => key && moduleAccess(key, modules) !== "enabled",
-    )
-  )
-    throw new Error("Business module is disabled or not entitled");
   const [business, subscription] = await Promise.all([
     trace.step("business", () =>
       database.query.merchants.findFirst({
@@ -78,12 +78,27 @@ export async function loadMerchantContext(
     trace.step("subscription", () => subscriptionSnapshot(merchantId)),
   ]);
   if (!business) throw new Error("Business unavailable");
+  const onboarding =
+    business.onboardingStep && business.onboardingStep !== "complete";
+  if (
+    !onboarding &&
+    requiredModules.some(
+      (key) => key && moduleAccess(key, modules) !== "enabled",
+    )
+  )
+    throw new Error("Business module is disabled or not entitled");
+  const profile = onboarding
+    ? await database.query.profiles.findFirst({
+        where: eq(s.profiles.id, u.id),
+      })
+    : null;
   return {
     business,
     businessType: businessType(business.businessType),
     modules,
     subscription,
     email: u.email ?? "",
+    ownerName: profile?.name ?? "",
     navigationCapabilities: capabilitiesForRole(membership.role),
   };
 }
@@ -97,11 +112,15 @@ async function loadDashboardData(
   if (!context) return null;
   const database = db();
   const merchantId = context.business.id;
-  const plan = dashboardLoadPlan(
-    view,
-    context.navigationCapabilities,
-    context.modules,
-  );
+  const plan =
+    context.business.onboardingStep &&
+    context.business.onboardingStep !== "complete"
+      ? []
+      : dashboardLoadPlan(
+          view,
+          context.navigationCapabilities,
+          context.modules,
+        );
 
   const [pages, products, categories, entitlements, media, catalog, prices] =
     await Promise.all([

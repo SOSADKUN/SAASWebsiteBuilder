@@ -1,6 +1,6 @@
 "use server";
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect, unstable_rethrow } from "next/navigation";
 import {
@@ -18,7 +18,8 @@ import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
 import { registrationErrorMessage } from "@/lib/auth-errors";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
-import { businessTypes } from "@/lib/business-modules";
+import { businessTypes, businessModules } from "@/lib/business-modules";
+import { recommendedServices } from "@/lib/system-services";
 import { initialBusinessLayout } from "@/lib/business-defaults";
 import { requireSubscription } from "@/lib/subscription-service";
 import {
@@ -91,8 +92,12 @@ export async function createBusiness(form: FormData) {
 async function createBusinessRecord(
   form: FormData,
   trace: ReturnType<typeof workspaceTrace>,
+  staged = false,
 ) {
   const u = await trace.step("authentication", () => user());
+  const ownerName = staged
+    ? z.string().trim().min(2).max(100).parse(form.get("ownerName"))
+    : (u.email ?? "Merchant");
   const name = z.string().min(2).max(100).parse(form.get("name"));
   const businessType = z
     .enum(
@@ -109,7 +114,7 @@ async function createBusinessRecord(
     .max(60)
     .parse(form.get("slug"));
   const database = db();
-  await trace.step("database_transaction", () =>
+  return trace.step("database_transaction", () =>
     database.transaction(async (tx) => {
       await trace.step("transaction_limits", () =>
         tx.execute(
@@ -119,11 +124,50 @@ async function createBusinessRecord(
       await trace.step("profile", () =>
         tx
           .insert(s.profiles)
-          .values({ id: u.id, name: u.email ?? "Merchant" })
+          .values({ id: u.id, name: ownerName })
           .onConflictDoNothing(),
       );
+      if (staged) {
+        // Serialize concurrent first submissions before creating the merchant.
+        await tx
+          .select()
+          .from(s.profiles)
+          .where(eq(s.profiles.id, u.id))
+          .for("update");
+        const claim = await tx.query.merchantTrialClaims.findFirst({
+          where: eq(s.merchantTrialClaims.userId, u.id),
+        });
+        if (claim) {
+          const membership = await tx.query.memberships.findFirst({
+            where: and(
+              eq(s.memberships.merchantId, claim.merchantId),
+              eq(s.memberships.userId, u.id),
+              eq(s.memberships.role, "owner"),
+            ),
+          });
+          if (!membership) throw new WorkspaceCreationError();
+          return { merchantId: claim.merchantId };
+        }
+        await tx
+          .update(s.profiles)
+          .set({ name: ownerName })
+          .where(eq(s.profiles.id, u.id));
+      }
       const [merchant] = await trace.step("merchant", () =>
-        tx.insert(s.merchants).values({ name, slug, businessType }).returning(),
+        tx
+          .insert(s.merchants)
+          .values({
+            name,
+            slug,
+            businessType,
+            ...(staged
+              ? {
+                  onboardingStep: "business_type" as const,
+                  onboardingServices: recommendedServices(businessType),
+                }
+              : {}),
+          })
+          .returning(),
       );
       const claims = await trace.step("trial_claim", () =>
         tx
@@ -153,23 +197,57 @@ async function createBusinessRecord(
         }),
       );
       await trace.step("categories", () =>
-        tx
-          .insert(s.categories)
-          .values(
-            (businessType === "cafe"
+        tx.insert(s.categories).values(
+          (staged
+            ? ["Products", "Other"]
+            : businessType === "cafe"
               ? ["Coffee", "Tea", "Pastries", "Food", "Other"]
               : businessType === "bakery"
                 ? ["Cakes", "Bread", "Pastries", "Other"]
                 : ["Retail products", "Other"]
-            ).map((name, position) => ({
-              merchantId: merchant.id,
-              name,
-              position,
-            })),
-          ),
+          ).map((name, position) => ({
+            merchantId: merchant.id,
+            name,
+            position,
+          })),
+        ),
       );
+      if (staged) {
+        const optional = businessModules
+          .filter((module) => module.optional)
+          .map((module) => module.key);
+        await tx
+          .update(s.merchantModules)
+          .set({ enabled: false })
+          .where(
+            and(
+              eq(s.merchantModules.merchantId, merchant.id),
+              inArray(s.merchantModules.moduleKey, optional),
+            ),
+          );
+      }
+      return { merchantId: merchant.id };
     }),
   );
+}
+export async function startBusinessSetup(form: FormData) {
+  const trace = workspaceTrace("onboarding.start");
+  try {
+    const result = await createBusinessRecord(form, trace, true);
+    revalidatePath("/dashboard", "layout");
+    return { ok: true as const, ...result };
+  } catch (error) {
+    unstable_rethrow(error);
+    trace.fail(error);
+    return {
+      ok: false as const,
+      error:
+        error instanceof z.ZodError
+          ? "Enter your name, business name and a valid website address."
+          : workspaceErrorMessage(error),
+      reference: trace.reference,
+    };
+  }
 }
 export async function createWorkspace(
   _previous: { error: string; reference?: string },

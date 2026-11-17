@@ -48,17 +48,12 @@ describe("multi-industry foundation", () => {
         .some((item) => item.id === "tables"),
     ).toBe(false);
     expect(nav.primary.some((n) => n.id === "pos")).toBe(false);
-    expect(nav.primary.find((n) => n.id === "appointments")).toMatchObject({
-      comingSoon: true,
-    });
-    expect(
-      nav.primary.find((n) => n.id === "service_checkout")?.href,
-    ).toBeUndefined();
+    expect(nav.primary.find((n) => n.id === "appointments")).toBeUndefined();
     expect(
       merchantNavigation("bakery").primary.find(
         (n) => n.id === "cake_preorders",
       ),
-    ).toMatchObject({ comingSoon: true });
+    ).toBeUndefined();
   });
   it("validates registry dependencies and marks unbuilt features unavailable", () => {
     expect(new Set(businessModules.map((m) => m.key)).size).toBe(

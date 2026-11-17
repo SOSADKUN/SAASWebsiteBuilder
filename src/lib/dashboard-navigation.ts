@@ -161,7 +161,7 @@ navigationGroups.push({
     {
       id: "modules",
       moduleKey: "settings",
-      label: "Business Modules",
+      label: "System Services",
       view: "Business Modules",
       href: "/dashboard/store/modules",
       requires: "settings:view",
@@ -224,19 +224,13 @@ export function merchantNavigation(
       !item.moduleKey || moduleAccess(item.moduleKey, active) === "enabled"
     );
   };
-  const planned: NavigationItem[] = businessModules
-    .filter(
-      (m) =>
-        m.availability === "coming_soon" &&
-        m.suggestedTypes.includes(type) &&
-        ["bakery", "salon"].includes(m.category),
-    )
-    .map((m) => ({ id: m.key, label: m.name, comingSoon: true }));
   return {
-    primary: [...primaryNavigation.filter(visible), ...planned],
+    primary: primaryNavigation.filter(
+      (item) => !item.comingSoon && visible(item),
+    ),
     groups: navigationGroups.map((g) => ({
       ...g,
-      children: g.children.filter(visible),
+      children: g.children.filter((item) => !item.comingSoon && visible(item)),
     })),
   };
 }

@@ -1,4 +1,5 @@
 import type { MerchantCapability } from "./merchant-capabilities";
+import { servicePricing } from "./service-pricing";
 export const businessTypes = {
   cafe: "Cafe / Restaurant",
   bakery: "Cake Shop / Bakery",
@@ -49,7 +50,7 @@ function module(
     subscription: "writes",
     entitlement: "included",
     suggestedTypes: all,
-    demoMonthlyPrice: null,
+    demoMonthlyPrice: servicePricing[key] ?? null,
   };
 }
 function future(
@@ -65,7 +66,7 @@ function future(
     entitlement: "separate",
     suggestedTypes,
     navigation: { label: name },
-    demoMonthlyPrice: 2900,
+    demoMonthlyPrice: servicePricing[key] ?? null,
   };
 }
 export const businessModules: readonly ModuleDefinition[] = [
@@ -194,6 +195,7 @@ export const businessModules: readonly ModuleDefinition[] = [
 ];
 export type ModuleState = {
   key: string;
+  available?: boolean;
   enabled: boolean;
   entitled: boolean;
   expiresAt: string | null;
@@ -220,6 +222,7 @@ export function moduleAccess(
     return "coming_soon";
   if (visited.has(key)) return "disabled";
   const state = states.find((s) => s.key === key);
+  if (state?.available === false) return "disabled";
   if (!state?.enabled) return "disabled";
   if (!state.entitled) return "not_entitled";
   if (state.expiresAt && Date.parse(state.expiresAt) <= now) return "expired";

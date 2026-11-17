@@ -1,6 +1,7 @@
 ﻿"use client";
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { MerchantSidebar } from "./sidebar";
+import { TrialBanner } from "./trial-banner";
 import { SubscriptionPanel } from "./subscription-panel";
 import { subscriptionAccess } from "@/lib/subscription-policy";
 import { useMerchantWorkspace } from "./workspace-state";
@@ -217,33 +218,21 @@ export function Dashboard({
           </div>
         </header>
         <main className={isEditor ? "editor-main" : "dashboard-main"}>
-          {!access.allowed && tab !== "Subscription & Billing" && (
-            <div className="notice subscription-expired" role="status">
-              <strong>Your trial has ended.</strong> You can view and export
-              your data. Subscribe to resume changes.{" "}
-              <button
-                className="button compact"
-                onClick={() => navigate("Subscription & Billing")}
-              >
-                View subscription
-              </button>
-            </div>
-          )}
-          {access.status === "trialing" && tab === "Overview" && (
-            <div className="notice">
-              Your 14-day trial ends{" "}
-              {new Date(data.subscription.trialEndsAt)
-                .toISOString()
-                .slice(0, 10)}{" "}
-              (UTC).{" "}
-              <button
-                className="text-button"
-                onClick={() => navigate("Subscription & Billing")}
-              >
-                Upgrade / Subscribe
-              </button>
-            </div>
-          )}
+          <TrialBanner
+            key={data.subscription.serverNow}
+            subscription={data.subscription}
+            modules={data.modules}
+            onManage={
+              data.navigationCapabilities.includes("modules:manage")
+                ? () => navigate("Business Modules")
+                : undefined
+            }
+            onSubscribe={
+              data.navigationCapabilities.includes("settings:view")
+                ? () => navigate("Subscription & Billing")
+                : undefined
+            }
+          />
           {tab === "Business Modules" && (
             <ModuleStore
               merchantId={data.business.id}
