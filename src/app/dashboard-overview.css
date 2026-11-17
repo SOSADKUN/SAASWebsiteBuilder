@@ -1,3 +1,26 @@
+.servqoo-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 20px;
+  max-width: 900px;
+}
+.servqoo-contact-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 28px;
+}
+.servqoo-contact-card h2,
+.servqoo-contact-card p {
+  margin: 0;
+}
+.servqoo-contact-card .button {
+  margin-top: auto;
+}
+.servqoo-contact-card small {
+  color: var(--muted);
+}
 .overview-heading h1 {
   max-width: 900px;
   font-size: clamp(24px, 2.4vw, 34px);

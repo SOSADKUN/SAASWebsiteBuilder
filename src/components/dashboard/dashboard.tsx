@@ -5,6 +5,7 @@ import {
 } from "@/lib/image-upload";
 import { ImageProgress } from "@/components/image-progress";
 import { CompanyStorage } from "./company-storage";
+import { ContactServqoo, type SupportContacts } from "./contact-servqoo";
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { MerchantSidebar } from "./sidebar";
 import { TrialBanner } from "./trial-banner";
@@ -51,9 +52,11 @@ import { updateBusiness, createPage } from "@/server/actions";
 export function Dashboard({
   data,
   initialTab = "Overview",
+  supportContacts = { email: null, whatsapp: null },
 }: {
   data: Data;
   initialTab?: string;
+  supportContacts?: SupportContacts;
 }) {
   const router = useRouter();
   const [imageProgress, setImageProgress] = useState<ImageState | null>(null);
@@ -526,6 +529,16 @@ export function Dashboard({
             <div>
               <MenuManager data={data} run={run} pending={pending} />
             </div>
+          )}
+          {tab === "Contact SERVQOO" && (
+            <>
+              <PageHeading
+                title="Contact SERVQOO"
+                eyebrow="SETTINGS"
+                description="Choose how you’d like to get in touch."
+              />
+              <ContactServqoo contacts={supportContacts} />
+            </>
           )}
           {tab === "General Settings" && (
             <>

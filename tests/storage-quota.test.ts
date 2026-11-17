@@ -260,6 +260,42 @@ it("preserves quota and library records when deletion fails", async () => {
   expect((await storageSnapshot(merchant)).used).toBe(1024);
   expect((await pg.query("SELECT * FROM media_assets")).rows).toHaveLength(1);
 });
+it("releases only an absent image's reservation, preserves entitlements and stays nonnegative on retry", async () => {
+  await upload();
+  const { rows } = await pg.query<{ id: string; path: string }>(
+    "SELECT id,path FROM media_assets WHERE merchant_id=$1",
+    [merchant],
+  );
+  await pg.query(
+    "INSERT INTO merchant_storage_entitlements(merchant_id,verified_at,expires_at,source) VALUES($1,now(),now()+interval '1 day','admin')",
+    [merchant],
+  );
+  // Simulate an externally removed object, only in this disposable fixture.
+  await pg.query("DELETE FROM storage.objects WHERE name=$1", [rows[0].path]);
+  expect(await storageSnapshot(merchant)).toMatchObject({
+    used: 0,
+    reserved: 1024,
+  });
+  mock.remove.mockResolvedValue({ error: { code: "NoSuchKey", status: 404 } });
+  mock.exists.mockResolvedValue({
+    data: false,
+    error: { code: "NoSuchKey", status: 404 },
+  });
+  await removeMediaAsset(merchant, rows[0].id);
+  await removeMediaAsset(merchant, rows[0].id);
+  expect(await storageSnapshot(merchant)).toMatchObject({
+    used: 0,
+    reserved: 0,
+  });
+  expect(
+    (
+      await pg.query(
+        "SELECT * FROM merchant_storage_entitlements WHERE merchant_id=$1",
+        [merchant],
+      )
+    ).rows,
+  ).toHaveLength(1);
+});
 it("pending cancellation blocks a late storage commit without deleting an image", async () => {
   const id = crypto.randomUUID();
   mock.upload.mockResolvedValueOnce({ error: { message: "interrupted" } });

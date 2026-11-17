@@ -104,6 +104,44 @@ it("retains metadata when storage removal fails", async () => {
   );
   expect(await exists(file.id)).toBe(true);
 });
+it("cleans a stale library record when remove reports a missing object", async () => {
+  const file = await asset();
+  mocks.remove.mockResolvedValue({ error: { code: "NoSuchKey", status: 404 } });
+  mocks.exists.mockResolvedValue({
+    data: false,
+    error: { code: "NoSuchKey", status: 404 },
+  });
+  await removeMediaAsset(merchant, file.id);
+  expect(await exists(file.id)).toBe(false);
+  await removeMediaAsset(merchant, file.id);
+  expect(mocks.remove).toHaveBeenCalledOnce();
+});
+it("returns safely for an absent record without guessing a Storage path", async () => {
+  await removeMediaAsset(merchant, crypto.randomUUID());
+  expect(mocks.remove).not.toHaveBeenCalled();
+  expect(mocks.from).not.toHaveBeenCalled();
+});
+it("classifies thrown Storage permission failures and preserves metadata", async () => {
+  const file = await asset();
+  mocks.exists.mockRejectedValue({
+    code: "AccessDenied",
+    status: 403,
+    message: "secret",
+  });
+  await expect(removeMediaAsset(merchant, file.id)).rejects.toMatchObject({
+    code: "MEDIA_STORAGE_DENIED",
+  });
+  expect(await exists(file.id)).toBe(true);
+});
+it("classifies thrown connection failures and preserves metadata", async () => {
+  const file = await asset();
+  mocks.remove.mockRejectedValue(new TypeError("fetch failed: private URL"));
+  await expect(removeMediaAsset(merchant, file.id)).rejects.toMatchObject({
+    code: "MEDIA_STORAGE_REMOVE",
+    message: "Storage removal failed",
+  });
+  expect(await exists(file.id)).toBe(true);
+});
 
 it("accepts confirmed missing-object responses but retains metadata for ambiguous checks", async () => {
   const absent = await asset();

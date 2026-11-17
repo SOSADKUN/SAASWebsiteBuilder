@@ -2,6 +2,8 @@
 import { unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { workspaceTrace } from "@/lib/workspace-diagnostics";
+import { workspaceErrorCode } from "@/lib/workspace-errors";
+import { mediaDeleteMessage } from "@/lib/media-errors";
 import { loadOverviewMetrics, removeMediaAsset } from "./workspace-service";
 
 export async function overviewMetrics(merchantId: string) {
@@ -30,8 +32,7 @@ export async function deleteMedia(merchantId: string, assetId: string) {
     unstable_rethrow(error);
     return {
       ok: false as const,
-      error:
-        "Could not complete image deletion. Please try again. If it continues, contact support.",
+      error: mediaDeleteMessage(workspaceErrorCode(error)),
       reference: trace.reference,
     };
   }

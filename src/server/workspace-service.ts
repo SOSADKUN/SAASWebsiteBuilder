@@ -5,6 +5,11 @@ import { db } from "@/db";
 import * as s from "@/db/schema";
 import { authorize } from "@/lib/auth";
 import { storageAdmin } from "@/lib/storage-admin";
+import {
+  MediaError,
+  missingStorageObject,
+  mediaStorageFailure,
+} from "@/lib/media-errors";
 
 export async function loadOverviewMetrics(merchantId: string) {
   await authorize(z.uuid().parse(merchantId), "reports:view");
@@ -49,25 +54,31 @@ export async function removeMediaAsset(merchantId: string, assetId: string) {
     asset.path.split("/").length !== 2 ||
     asset.path.includes("..")
   )
-    throw new Error("Invalid media path");
+    throw new MediaError("MEDIA_INVALID_PATH", "Invalid media path");
   const client = storageAdmin();
   const bucket = client.storage.from("merchant-media");
-  const { error } = await bucket.remove([asset.path]);
-  if (error) throw new Error("Storage removal failed");
+  try {
+    const { error } = await bucket.remove([asset.path]);
+    // A missing file is recoverable, but permissions/network failures are not
+    // evidence of absence. Keep metadata and reservations on those failures.
+    if (error && !missingStorageObject(error)) throw mediaStorageFailure(error);
+  } catch (error) {
+    if (!missingStorageObject(error)) {
+      if (!(error instanceof MediaError)) throw mediaStorageFailure(error);
+      throw error;
+    }
+  }
   // A storage policy can filter a remove request without deleting an object.
   // Verify against the authenticated object-info endpoint, not a cached public URL.
-  const remaining = await bucket.exists(asset.path);
+  const remaining = await bucket.exists(asset.path).catch((error: unknown) => {
+    if (missingStorageObject(error)) return { data: false, error: null };
+    throw mediaStorageFailure(error, true);
+  });
   // The installed Storage SDK returns an error object for confirmed absence.
   // Do not confuse that expected result with an ambiguous verification failure.
-  const infoError = remaining.error as {
-    code?: string;
-    status?: number;
-  } | null;
-  const missing =
-    infoError?.code === "NoSuchKey" ||
-    (infoError?.status === 404 && infoError.code === undefined);
-  if (infoError && !missing) throw new Error("Storage verification failed");
-  if (remaining.data) throw new Error("Storage removal failed");
+  if (remaining.error && !missingStorageObject(remaining.error))
+    throw mediaStorageFailure(remaining.error, true);
+  if (remaining.data) throw mediaStorageFailure(null);
   // Storage and SQL cannot share a transaction. Keep the record on storage
   // failure. If SQL fails after removal, retry safely removes the absent object
   // again before clearing the remaining metadata.
@@ -83,7 +94,7 @@ export async function removeMediaAsset(merchantId: string, assetId: string) {
     const rows = Array.isArray(result)
       ? result
       : (result as { rows: unknown[] }).rows;
-    if (rows.length) throw new Error("Storage removal failed");
+    if (rows.length) throw mediaStorageFailure(null);
     // Cancelling under the insert guard's same lock closes late-upload races.
     await tx
       .delete(s.mediaReservations)

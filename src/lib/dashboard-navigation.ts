@@ -17,6 +17,7 @@ export type DashboardView =
   | "Media Library"
   | "Preview / Publish"
   | "General Settings"
+  | "Contact SERVQOO"
   | "Subscription & Billing"
   | "Business Modules";
 // A module store is discovery/configuration, not a payment checkout.
@@ -150,6 +151,14 @@ export const navigationGroups: NavigationGroup[] = [
         requires: "settings:view",
       },
       { id: "security", label: "Security", comingSoon: true },
+      {
+        id: "contact-servqoo",
+        moduleKey: "settings",
+        label: "Contact SERVQOO",
+        view: "Contact SERVQOO",
+        href: "/dashboard/settings/contact",
+        requires: "settings:view",
+      },
     ],
   },
 ];

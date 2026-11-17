@@ -1,9 +1,14 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseConfiguration } from "./supabase-config";
+import { MediaError } from "./media-errors";
 export function storageAdmin() {
   const key = process.env.SUPABASE_STORAGE_SERVICE_KEY;
-  if (!key) throw new Error("Storage setup is pending. Contact support.");
+  if (!key)
+    throw new MediaError(
+      "MEDIA_STORAGE_CONFIG",
+      "Storage setup is pending. Contact support.",
+    );
   return createClient(getSupabaseConfiguration().url, key, {
     global: {
       fetch: (input, init) =>

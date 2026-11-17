@@ -8,6 +8,11 @@ export class WorkspaceCreationError extends Error {
 export function workspaceErrorCode(error: unknown): string {
   if (error instanceof WorkspaceCreationError) return "TRIAL_CLAIMED";
   const codes = new Set([
+    "MEDIA_STORAGE_CONFIG",
+    "MEDIA_STORAGE_DENIED",
+    "MEDIA_STORAGE_REMOVE",
+    "MEDIA_STORAGE_VERIFY",
+    "MEDIA_INVALID_PATH",
     "42P01",
     "42703",
     "42701",

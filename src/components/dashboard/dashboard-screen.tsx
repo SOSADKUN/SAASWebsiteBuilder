@@ -6,6 +6,7 @@ import { dashboardErrorMessage } from "@/lib/workspace-errors";
 import type { MerchantCapability } from "@/lib/merchant-capabilities";
 import { Dashboard } from "./dashboard";
 import { WorkspaceOnboarding } from "./workspace-onboarding";
+import { publicContacts } from "@/lib/public-site";
 
 export async function DashboardScreen({
   requiredCapability,
@@ -79,6 +80,7 @@ export async function DashboardScreen({
       key={initialTab ?? "Overview"}
       data={data}
       initialTab={initialTab}
+      supportContacts={publicContacts()}
     />
   ) : (
     <WorkspaceOnboarding />
