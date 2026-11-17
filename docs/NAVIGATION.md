@@ -15,6 +15,8 @@ Actual hrefs come from the registry; these are not independent permission grants
 
 Normal navigation uses App Router navigation and per-view server datasets. The shared layout/provider retains working editor state and unload warnings across routes. POS drafts are tab/company-scoped sessionStorage, not cross-device/offline orders. The mobile drawer retains focus/escape/return handling.
 
-Old category-management links redirect to Menu Management; old Component Store/Design Gallery links redirect to Website Editor. Keep those convention routes and legacy renderers. Retained gallery components also support visual fixtures; absence from the sidebar is not proof of dead code.
+Store → Website Designs opens `/dashboard/store/designs`, with category browsing, live layout previews and the existing demo unlock flow. `/dashboard/designs` redirects there. Settings → Contact SERVQOO opens `/dashboard/settings/contact`.
+
+Old category-management links redirect to Menu Management; legacy `/dashboard/components/...` links still redirect to Website Editor. Keep those convention routes and legacy renderers. Retained gallery components also support visual fixtures; absence from the sidebar is not proof of dead code.
 
 Owner, manager, legacy_editor, editor, cashier, kitchen and technician capabilities differ; owner/editor are not equivalent. Unknown roles get none. Staff invitations/role editing and outlets remain future work. Visibility is not a substitute for server authorization. See [current role boundaries](SERVQOO_PROJECT_GUIDE.md#4-authentication-and-company-model).

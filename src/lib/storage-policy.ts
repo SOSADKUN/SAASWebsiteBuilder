@@ -15,7 +15,7 @@ export function storageWarning(used: number, limit: number) {
         : "normal";
 }
 export function formatBytes(value: number) {
-  return `${(value / MIB).toFixed(2)} MiB`;
+  return `${(value / 1_000_000).toFixed(2)} MB`;
 }
 
 // The migration runner and disposable SQL fixtures compile the same limits.

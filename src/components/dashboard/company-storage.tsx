@@ -33,8 +33,8 @@ export function CompanyStorage({ merchantId }: { merchantId: string }) {
     };
   }, [merchantId]);
   return (
-    <section className="panel company-storage" aria-label="Company Storage">
-      <h3>Company Storage</h3>
+    <section className="panel company-storage" aria-label="Available Storage">
+      <h3>Available Storage:</h3>
       {error ? (
         <p role="alert">{error}</p>
       ) : !usage ? (
@@ -42,11 +42,10 @@ export function CompanyStorage({ merchantId }: { merchantId: string }) {
       ) : (
         <>
           <p>
-            {formatBytes(usage.used)} used / {formatBytes(usage.limit)} total ·{" "}
             {formatBytes(
               Math.max(0, usage.limit - usage.used - usage.reserved),
             )}{" "}
-            available
+            available of {formatBytes(usage.limit)}
           </p>
           <progress
             aria-label="Company storage used"
@@ -70,11 +69,7 @@ export function CompanyStorage({ merchantId }: { merchantId: string }) {
                   : "Storage is at least 80% full."}
             </p>
           )}
-          <small>
-            Free Core: 20 MiB · eligible trial: 50 MiB · separately verified
-            storage entitlement: 100 MiB. POS and Orders do not increase
-            storage. Free Core uploads remain available within quota.
-          </small>
+          <small>Storage is shared by your website and menu images.</small>
         </>
       )}
     </section>

@@ -18,6 +18,8 @@ export function dashboardLoadPlan(
     capabilities.includes(cap) && moduleReadable(module, states);
   const website = can("website:view", "website");
   const catalog = can("menu:view", "catalog");
+  if (view === "Website Designs")
+    return website ? ["products", "catalog", "prices", "entitlements"] : [];
   if (["Website Editor", "Preview / Publish"].includes(view))
     return website
       ? [

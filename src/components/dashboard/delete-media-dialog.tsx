@@ -35,9 +35,8 @@ export function DeleteMediaDialog({
       <img src={asset.url} alt="" />
       <b>{asset.name}</b>
       <p>
-        This permanently removes the image from your library and Supabase
-        Storage. Any website or menu using its URL will lose the image. This
-        cannot be undone.
+        This permanently removes the image. Any website or menu using its URL
+        will lose the image. This cannot be undone.
       </p>
       {error && (
         <p className="media-delete-error" role="alert">

@@ -19,7 +19,8 @@ export type DashboardView =
   | "General Settings"
   | "Contact SERVQOO"
   | "Subscription & Billing"
-  | "Business Modules";
+  | "Business Modules"
+  | "Website Designs";
 // A module store is discovery/configuration, not a payment checkout.
 export type NavigationItem = {
   id: string;
@@ -178,7 +179,7 @@ navigationGroups.push({
     {
       id: "website-designs",
       label: "Website Designs",
-      view: undefined,
+      view: "Website Designs",
       href: "/dashboard/store/designs",
       requires: "website:view",
       moduleKey: "website",

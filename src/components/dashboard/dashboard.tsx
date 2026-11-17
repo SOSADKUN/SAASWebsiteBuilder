@@ -5,6 +5,7 @@ import {
 } from "@/lib/image-upload";
 import { ImageProgress } from "@/components/image-progress";
 import { CompanyStorage } from "./company-storage";
+import { WebsiteDesignStore } from "@/components/designs/website-design-store";
 import { ContactServqoo, type SupportContacts } from "./contact-servqoo";
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { MerchantSidebar } from "./sidebar";
@@ -250,6 +251,24 @@ export function Dashboard({
                 "modules:manage",
               )}
               canWrite={true}
+            />
+          )}
+          {tab === "Website Designs" && (
+            <WebsiteDesignStore
+              business={data.business}
+              products={data.products}
+              offers={catalog.map((d) => ({
+                key: d.key,
+                active: d.active,
+                premium: d.premium,
+                price: Math.round(d.price * 100),
+              }))}
+              unlocked={unlocked}
+              canUnlock={data.navigationCapabilities.includes(
+                "marketplace:use",
+              )}
+              onOpenEditor={() => navigate("Website Editor")}
+              onRefresh={() => router.refresh()}
             />
           )}
           {tab === "Subscription & Billing" && (
@@ -584,16 +603,11 @@ export function Dashboard({
           )}
           {tab === "Media Library" && (
             <>
-              <PageHeading
-                eyebrow="YOUR BRAND, IN PICTURES"
-                title="A picture of your world."
-                description="Choose JPEG, PNG or WebP up to 20 MiB. Images are optimized to fit 1920 pixels and 2 MiB before upload."
-              />
+              <PageHeading title="Media Library" />
               <CompanyStorage merchantId={data.business.id} />
               <ImageProgress state={imageProgress} />
               <div className="upload-zone">
                 <Images size={30} />
-                <h3>A little glimpse of your business</h3>
                 <p>Upload photos to use in your sections and menu.</p>
                 <label className="button primary upload-button">
                   {pending ? "Uploading…" : "Choose image"}
@@ -810,16 +824,16 @@ function PageHeading({
   title,
   description,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
 }) {
   return (
     <div className="page-heading">
       <div>
-        <span className="eyebrow">{eyebrow}</span>
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
     </div>
   );

@@ -2,9 +2,14 @@
 
 Current policy: [Project Guide](SERVQOO_PROJECT_GUIDE.md).
 
-Layouts are selected in Website Editor. The standalone Component Store and
-Design Gallery navigation entries have been removed; their old URLs redirect to
-the editor. Existing merchant entitlements are preserved by component key.
+Store → Website Designs (`/dashboard/store/designs`) provides a horizontal
+section-category carousel, a vertical design selector and a large live section
+preview with desktop/tablet/mobile widths. Only active catalog entries are offered.
+Owned/included designs open the editor; locked designs use the existing explicit
+demo unlock dialog. Browsing never modifies a draft or published website. Choose
+the layout in the editor's section dropdown to apply it. Existing merchant
+entitlements are preserved by component key. `/dashboard/designs` redirects to
+this store; legacy `/dashboard/components/...` links still lead to the editor.
 
 Each section's layout dropdown has a preview button and, for locked layouts, a
 lock/price button. Selecting a locked design changes only the working preview.
