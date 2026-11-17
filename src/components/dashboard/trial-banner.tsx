@@ -74,10 +74,11 @@ export function TrialBanner({
           {access.allowed
             ? "RM0 due during your trial. "
             : "Free Core stays available. New paid-service operations need a verified service entitlement; existing tickets can be finished. "}
+          <br />
           {!access.allowed && (
             <>
               Services requiring entitlement:{" "}
-              {needsEntitlement.map((s) => s.name).join(", ") || "None"}.{" "}
+              {needsEntitlement.map((s) => s.name).join(", ") || "None"}. <br />
             </>
           )}
           Trial expiry:{" "}
@@ -87,9 +88,12 @@ export function TrialBanner({
             month: "short",
             year: "numeric",
           })}{" "}
-          (MYT). Selected paid services: {names.join(", ") || "None"}. Estimated{" "}
-          {formatServicePrice(estimatedMonthly(keys))}/month after trial. No
-          automatic charges.
+          (MYT).
+          <br />
+          Selected paid services: {names.join(", ") || "None"}. Estimated{" "}
+          {formatServicePrice(estimatedMonthly(keys))}/month after trial.
+          <br />
+          No automatic charges.
         </p>
       </div>
       <div className="trial-banner-actions">

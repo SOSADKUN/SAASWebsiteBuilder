@@ -69,7 +69,10 @@ export function CompanyStorage({ merchantId }: { merchantId: string }) {
                   : "Storage is at least 80% full."}
             </p>
           )}
-          <small>Storage is shared by your website and menu images.</small>
+          <small>
+            Free Core includes 20 MB. During your trial, get an extra 30 MB (50
+            MB total). Storage is shared by your website and menu images.
+          </small>
         </>
       )}
     </section>
