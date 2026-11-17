@@ -31,11 +31,6 @@ export function AuthPage({
   return (
     <main className="servqo-login">
       <div className="servqo-auth-window">
-        <div className="auth-window-bar" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
         <section className="servqo-auth" aria-labelledby="login-title">
           <Brand />
           <div className="servqo-auth-content">

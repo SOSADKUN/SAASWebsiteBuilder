@@ -42,22 +42,6 @@
   box-shadow: 0 28px 70px #29452c25;
   background: #fafbf8;
 }
-.auth-window-bar {
-  grid-column: 1/-1;
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  height: 28px;
-  padding: 0 16px;
-  background: #b7c5b67a;
-  border-bottom: 2px solid white;
-}
-.auth-window-bar i {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: white;
-}
 .servqo-auth {
   padding: clamp(28px, 4vw, 60px);
   display: flex;
