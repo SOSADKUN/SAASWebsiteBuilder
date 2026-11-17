@@ -20,31 +20,33 @@ export function ContactServqoo({ contacts }: { contacts: SupportContacts }) {
           href: contacts.whatsapp,
           action: "Open WhatsApp",
         },
-      ].map(({ label, icon: Icon, description, href, action }) => (
-        <article className="panel servqoo-contact-card" key={label}>
-          <Icon size={26} aria-hidden="true" />
-          <h2>{label}</h2>
-          <p>{description}</p>
-          {href ? (
-            <a
-              className="button primary"
-              href={href}
-              {...(label === "WhatsApp"
-                ? { target: "_blank", rel: "noopener noreferrer" }
-                : {})}
-            >
-              {action} <ArrowUpRight size={16} aria-hidden="true" />
-            </a>
-          ) : (
-            <>
-              <button className="button" disabled>
-                {action}
-              </button>
-              <small>Contact details will be available soon.</small>
-            </>
-          )}
-        </article>
-      ))}
+      ]
+        .filter((method) => method.label !== "WhatsApp" || method.href)
+        .map(({ label, icon: Icon, description, href, action }) => (
+          <article className="panel servqoo-contact-card" key={label}>
+            <Icon size={26} aria-hidden="true" />
+            <h2>{label}</h2>
+            <p>{description}</p>
+            {href ? (
+              <a
+                className="button primary"
+                href={href}
+                {...(label === "WhatsApp"
+                  ? { target: "_blank", rel: "noopener noreferrer" }
+                  : {})}
+              >
+                {action} <ArrowUpRight size={16} aria-hidden="true" />
+              </a>
+            ) : (
+              <>
+                <button className="button" disabled>
+                  {action}
+                </button>
+                <small>Contact details will be available soon.</small>
+              </>
+            )}
+          </article>
+        ))}
     </section>
   );
 }

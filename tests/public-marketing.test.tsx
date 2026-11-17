@@ -157,7 +157,7 @@ describe("public URLs and contact configuration", () => {
       }),
     ).toEqual({
       email: "owner@example.test",
-      whatsapp: "https://wa.me/60123456789",
+      whatsapp: `https://wa.me/60123456789?text=${encodeURIComponent("Hi SERVQOO, I would like to know more about your services.")}`,
     });
   });
   it("prepares canonical metadata and sitemaps without indexing preview environments", () => {

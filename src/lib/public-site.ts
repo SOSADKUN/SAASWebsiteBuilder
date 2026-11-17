@@ -54,7 +54,7 @@ export function publicContacts(
     email: email.success ? email.data : null,
     whatsapp:
       phone && /^[1-9][0-9]{7,14}$/.test(phone)
-        ? `https://wa.me/${phone}`
+        ? `https://wa.me/${phone}?text=${encodeURIComponent("Hi SERVQOO, I would like to know more about your services.")}`
         : null,
   };
 }
