@@ -19,6 +19,7 @@ export function MenuManager({
   run: (action: () => Promise<unknown>, message: string) => void;
   pending: boolean;
 }) {
+  const canEdit = data.navigationCapabilities.includes("menu:manage");
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [productError, setProductError] = useState<{
     error: string;
@@ -65,7 +66,7 @@ export function MenuManager({
         </div>
         <button
           className="button primary"
-          disabled={pending || productPending}
+          disabled={!canEdit || pending || productPending}
           onClick={() => {
             setProductError(null);
             setEditing({
@@ -115,6 +116,7 @@ export function MenuManager({
               </button>
               <button
                 className="icon-button"
+                disabled={!canEdit}
                 aria-label={`Edit ${c.name}`}
                 onClick={() => {
                   setCategoryEdit(c.id);
@@ -125,6 +127,7 @@ export function MenuManager({
               </button>
               <button
                 className="icon-button"
+                disabled={!canEdit}
                 aria-label={`Delete ${c.name}`}
                 onClick={() =>
                   run(
@@ -150,6 +153,7 @@ export function MenuManager({
             }}
           >
             <input
+              disabled={!canEdit}
               aria-label="Category name"
               placeholder="New category"
               value={categoryName}
@@ -157,7 +161,7 @@ export function MenuManager({
               maxLength={60}
               required
             />
-            <button disabled={pending} className="button compact">
+            <button disabled={!canEdit || pending} className="button compact">
               {categoryEdit ? "Save category" : "+ Add category"}
             </button>
           </form>
@@ -217,7 +221,7 @@ export function MenuManager({
                       <td>
                         <button
                           className={`pill ${p.available ? "" : "unavailable"}`}
-                          disabled={pending || productPending}
+                          disabled={!canEdit || pending || productPending}
                           onClick={() => toggleProduct(p)}
                         >
                           {p.available ? "Available" : "Hidden"}
@@ -226,6 +230,7 @@ export function MenuManager({
                       <td>
                         <button
                           className="icon-button"
+                          disabled={!canEdit}
                           aria-label={`Edit ${p.name}`}
                           onClick={() => {
                             setProductError(null);
@@ -236,6 +241,7 @@ export function MenuManager({
                         </button>
                         <button
                           className="icon-button"
+                          disabled={!canEdit}
                           aria-label={`Delete ${p.name}`}
                           onClick={() =>
                             run(

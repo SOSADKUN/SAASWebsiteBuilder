@@ -545,3 +545,14 @@
     width: 100%;
   }
 }
+.module-store > .panel {
+  margin-bottom: 20px;
+}
+.module-store .panel p {
+  margin: 12px 0;
+  line-height: 1.5;
+}
+.module-store .panel h2 {
+  margin: 10px 0;
+  font-size: 20px;
+}

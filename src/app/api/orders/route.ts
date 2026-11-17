@@ -44,16 +44,21 @@ export async function GET(request: NextRequest) {
       ["Business access denied", "Workspace permission required"].includes(
         error.message,
       );
+    const moduleDenied =
+      error instanceof Error &&
+      error.message === "Business module is disabled or not entitled";
     return NextResponse.json(
       {
-        error: denied
-          ? "You do not have access to these orders."
-          : ["42P01", "42703"].includes(code)
-            ? "POS setup is pending. Apply the orders database migration before using these screens."
-            : "Orders could not sync. Check the connection and try again.",
+        error: moduleDenied
+          ? "This ordering module is disabled or its license has expired. Contact the business owner."
+          : denied
+            ? "You do not have access to these orders."
+            : ["42P01", "42703"].includes(code)
+              ? "POS setup is pending. Apply the orders database migration before using these screens."
+              : "Orders could not sync. Check the connection and try again.",
         reference: trace.reference,
       },
-      { status: denied ? 403 : 503, headers },
+      { status: denied || moduleDenied ? 403 : 503, headers },
     );
   }
 }

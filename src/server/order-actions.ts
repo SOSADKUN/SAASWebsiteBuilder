@@ -51,6 +51,13 @@ async function execute(
       code = "FORBIDDEN";
     } else if (
       error instanceof Error &&
+      error.message === "Business module is disabled or not entitled"
+    ) {
+      message =
+        "This ordering module is disabled or its license has expired. Ask the business owner to check Business Modules.";
+      code = "MODULE_UNAVAILABLE";
+    } else if (
+      error instanceof Error &&
       error.message.startsWith("Subscription required:")
     ) {
       message =

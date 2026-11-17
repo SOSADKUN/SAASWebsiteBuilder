@@ -10,6 +10,8 @@ export default async function ModulePage({
   params: Promise<{ module: string[] }>;
 }) {
   const { module } = await params;
+  if (module.join("/") === "store/designs")
+    redirect("/dashboard/website/editor");
   if (module[0] === "components") redirect("/dashboard/website/editor");
   if (module.join("/") === "maintenance/categories")
     redirect("/dashboard/maintenance/menu");

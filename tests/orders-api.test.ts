@@ -8,6 +8,18 @@ import { GET } from "../src/app/api/orders/route";
 const id = "11111111-1111-4111-8111-111111111111";
 beforeEach(() => vi.resetAllMocks());
 describe("orders sync endpoint", () => {
+  it("returns a safe forbidden response for a disabled or expired module", async () => {
+    mocks.snapshot.mockRejectedValueOnce(
+      new Error("Business module is disabled or not entitled"),
+    );
+    const response = await GET(
+      new NextRequest(
+        "https://servqo.example/api/orders?merchantId=11111111-1111-4111-8111-111111111111",
+      ),
+    );
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toContain("module is disabled");
+  });
   it("returns uncached tenant-scoped snapshots", async () => {
     mocks.snapshot.mockResolvedValue({ orders: [] });
     const response = await GET(

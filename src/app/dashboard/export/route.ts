@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const id = z.uuid().safeParse(request.nextUrl.searchParams.get("merchantId"));
   if (!id.success)
     return NextResponse.json({ error: "Invalid business ID" }, { status: 400 });
-  await authorize(id.data, "workspace:view");
+  await authorize(id.data, "data:export");
   // No subscription gate: merchants retain data access after trial expiry.
   const data = await db().transaction(
     async (tx) => {
@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
         entitlements: s.entitlements,
         subscriptions: s.merchantSubscriptions,
         subscriptionEvents: s.subscriptionEvents,
+        modules: s.merchantModules,
+        moduleEntitlements: s.moduleEntitlements,
         orders: s.orders,
         orderItems: s.orderItems,
         orderEvents: s.orderEvents,

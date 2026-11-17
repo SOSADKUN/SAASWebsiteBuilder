@@ -50,7 +50,7 @@ export function OverviewStats({
         </div>
         <div>
           <span>
-            <Wallet size={18} /> This month’s revenue
+            <Wallet size={18} /> Completed order totals
           </span>
           <strong>
             {metrics
@@ -62,7 +62,7 @@ export function OverviewStats({
           <small>
             {metrics
               ? `${metrics.completedOrders} completed orders · MYT`
-              : "Completed orders · Malaysian calendar month"}
+              : "Gross order totals, including unpaid orders"}
           </small>
         </div>
         <div>

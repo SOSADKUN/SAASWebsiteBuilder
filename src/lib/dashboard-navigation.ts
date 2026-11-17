@@ -1,4 +1,11 @@
 import type { MerchantCapability } from "./merchant-capabilities";
+import {
+  businessModules,
+  defaultModuleKeys,
+  moduleAccess,
+  type BusinessType,
+  type ModuleState,
+} from "./business-modules";
 export type DashboardView =
   | "Overview"
   | "Menu Manager"
@@ -10,7 +17,9 @@ export type DashboardView =
   | "Media Library"
   | "Preview / Publish"
   | "General Settings"
-  | "Subscription & Billing";
+  | "Subscription & Billing"
+  | "Business Modules";
+// A module store is discovery/configuration, not a payment checkout.
 export type NavigationItem = {
   id: string;
   label: string;
@@ -18,6 +27,7 @@ export type NavigationItem = {
   href?: string;
   requires?: MerchantCapability;
   comingSoon?: boolean;
+  moduleKey?: string;
 };
 export type NavigationGroup = {
   id: string;
@@ -28,6 +38,7 @@ export type NavigationGroup = {
 export const primaryNavigation: NavigationItem[] = [
   {
     id: "overview",
+    moduleKey: "overview",
     label: "Overview",
     view: "Overview",
     href: "/dashboard",
@@ -35,6 +46,7 @@ export const primaryNavigation: NavigationItem[] = [
   },
   {
     id: "pos",
+    moduleKey: "pos",
     label: "POS / Cashier",
     view: "POS / Cashier",
     href: "/dashboard/pos",
@@ -42,10 +54,11 @@ export const primaryNavigation: NavigationItem[] = [
   },
   {
     id: "orders",
+    moduleKey: "kitchen_queue",
     label: "Orders",
     view: "Orders",
     href: "/dashboard/orders",
-    requires: "orders:manage",
+    requires: "orders:view",
   },
 ];
 export const navigationGroups: NavigationGroup[] = [
@@ -56,55 +69,61 @@ export const navigationGroups: NavigationGroup[] = [
     children: [
       {
         id: "menu",
+        moduleKey: "catalog",
         label: "Menu Management",
         view: "Menu Manager",
         href: "/dashboard/maintenance/menu",
-        requires: "menu:manage",
+        requires: "menu:view",
       },
       { id: "employees", label: "Employee Management", comingSoon: true },
       { id: "tables", label: "Table Management", comingSoon: true },
       { id: "promotions", label: "Promotions", comingSoon: true },
       {
         id: "business",
+        moduleKey: "business",
         label: "Business Information",
         view: "Website Settings",
         href: "/dashboard/maintenance/business",
-        requires: "business:manage",
+        requires: "business:view",
       },
     ],
   },
   {
     id: "website",
-    label: "Café Website Builder",
+    label: "Website Builder",
     icon: "website",
     children: [
       {
         id: "editor",
+        moduleKey: "website",
         label: "Website Editor",
         view: "Website Editor",
         href: "/dashboard/website/editor",
-        requires: "website:manage",
+        requires: "website:view",
       },
       {
         id: "pages",
+        moduleKey: "website",
         label: "Pages",
         view: "Pages",
         href: "/dashboard/website/pages",
-        requires: "website:manage",
+        requires: "website:view",
       },
       {
         id: "media",
+        moduleKey: "media",
         label: "Media Library",
         view: "Media Library",
         href: "/dashboard/website/media",
-        requires: "website:manage",
+        requires: "media:view",
       },
       {
         id: "publish",
+        moduleKey: "website",
         label: "Preview / Publish",
         view: "Preview / Publish",
         href: "/dashboard/website/publish",
-        requires: "website:manage",
+        requires: "website:view",
       },
     ],
   },
@@ -115,6 +134,7 @@ export const navigationGroups: NavigationGroup[] = [
     children: [
       {
         id: "general",
+        moduleKey: "settings",
         label: "General",
         view: "General Settings",
         href: "/dashboard/settings/general",
@@ -123,6 +143,7 @@ export const navigationGroups: NavigationGroup[] = [
       { id: "permissions", label: "Staff Permissions", comingSoon: true },
       {
         id: "billing",
+        moduleKey: "settings",
         label: "Subscription & Billing",
         view: "Subscription & Billing",
         href: "/dashboard/settings/billing",
@@ -132,6 +153,29 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
 ];
+navigationGroups.push({
+  id: "store",
+  label: "Store",
+  icon: "store",
+  children: [
+    {
+      id: "modules",
+      moduleKey: "settings",
+      label: "Business Modules",
+      view: "Business Modules",
+      href: "/dashboard/store/modules",
+      requires: "settings:view",
+    },
+    {
+      id: "website-designs",
+      label: "Website Designs",
+      view: undefined,
+      href: "/dashboard/store/designs",
+      requires: "website:view",
+      moduleKey: "website",
+    },
+  ],
+});
 export const navigationItems = [
   ...primaryNavigation,
   ...navigationGroups.flatMap((g) => g.children),
@@ -155,4 +199,44 @@ export function isNavigationVisible(
   capabilities: readonly MerchantCapability[],
 ) {
   return !item.requires || capabilities.includes(item.requires);
+}
+
+export function merchantNavigation(
+  type: BusinessType = "cafe",
+  states?: readonly ModuleState[],
+) {
+  const active =
+    states ??
+    defaultModuleKeys(type).map((key) => ({
+      key,
+      enabled: true,
+      entitled: true,
+      expiresAt: null,
+    }));
+  const visible = (item: NavigationItem) => {
+    if (item.comingSoon) {
+      const planned = businessModules.find(
+        (module) => module.key === (item.moduleKey ?? item.id),
+      );
+      return !planned || planned.suggestedTypes.includes(type);
+    }
+    return (
+      !item.moduleKey || moduleAccess(item.moduleKey, active) === "enabled"
+    );
+  };
+  const planned: NavigationItem[] = businessModules
+    .filter(
+      (m) =>
+        m.availability === "coming_soon" &&
+        m.suggestedTypes.includes(type) &&
+        ["bakery", "salon"].includes(m.category),
+    )
+    .map((m) => ({ id: m.key, label: m.name, comingSoon: true }));
+  return {
+    primary: [...primaryNavigation.filter(visible), ...planned],
+    groups: navigationGroups.map((g) => ({
+      ...g,
+      children: g.children.filter(visible),
+    })),
+  };
 }

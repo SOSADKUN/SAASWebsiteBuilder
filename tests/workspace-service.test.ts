@@ -98,6 +98,25 @@ it("retains metadata when storage removal fails", async () => {
   );
   expect(await exists(file.id)).toBe(true);
 });
+
+it("accepts confirmed missing-object responses but retains metadata for ambiguous checks", async () => {
+  const absent = await asset();
+  mocks.exists.mockResolvedValueOnce({
+    data: false,
+    error: { code: "NoSuchKey", status: 404 },
+  });
+  await removeMediaAsset(merchant, absent.id);
+  expect(await exists(absent.id)).toBe(false);
+  const uncertain = await asset();
+  mocks.exists.mockResolvedValueOnce({
+    data: false,
+    error: { code: "AccessDenied", status: 403 },
+  });
+  await expect(removeMediaAsset(merchant, uncertain.id)).rejects.toThrow(
+    "Storage verification failed",
+  );
+  expect(await exists(uncertain.id)).toBe(true);
+});
 it("retains metadata if storage reports success but the object still exists", async () => {
   const file = await asset();
   mocks.exists.mockResolvedValue({ data: true, error: null });

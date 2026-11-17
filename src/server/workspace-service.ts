@@ -7,7 +7,7 @@ import { authorize, supabase } from "@/lib/auth";
 import { requireSubscription } from "@/lib/subscription-service";
 
 export async function loadOverviewMetrics(merchantId: string) {
-  await authorize(z.uuid().parse(merchantId), "workspace:view");
+  await authorize(z.uuid().parse(merchantId), "reports:view");
   // A terminal completed order's updated_at is its completion time. Use the
   // business's Malaysian calendar month, including orders created last month.
   const [row] = await db()
@@ -33,7 +33,7 @@ export async function loadOverviewMetrics(merchantId: string) {
 }
 
 export async function removeMediaAsset(merchantId: string, assetId: string) {
-  await authorize(z.uuid().parse(merchantId), "website:manage");
+  await authorize(z.uuid().parse(merchantId), "media:manage");
   z.uuid().parse(assetId);
   await requireSubscription(merchantId);
   const database = db();
@@ -55,6 +55,16 @@ export async function removeMediaAsset(merchantId: string, assetId: string) {
   // A storage policy can filter a remove request without deleting an object.
   // Verify against the authenticated object-info endpoint, not a cached public URL.
   const remaining = await bucket.exists(asset.path);
+  // The installed Storage SDK returns an error object for confirmed absence.
+  // Do not confuse that expected result with an ambiguous verification failure.
+  const infoError = remaining.error as {
+    code?: string;
+    status?: number;
+  } | null;
+  const missing =
+    infoError?.code === "NoSuchKey" ||
+    (infoError?.status === 404 && infoError.code === undefined);
+  if (infoError && !missing) throw new Error("Storage verification failed");
   if (remaining.data) throw new Error("Storage removal failed");
   // Storage and SQL cannot share a transaction. Keep the record on storage
   // failure. If SQL fails after removal, retry safely removes the absent object

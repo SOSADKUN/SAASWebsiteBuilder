@@ -3,6 +3,7 @@ import { useActionState, useState, useEffect } from "react";
 import { LoaderCircle, ArrowRight } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { createWorkspace } from "@/server/actions";
+import { businessTypes } from "@/lib/business-modules";
 export function WorkspaceOnboarding() {
   const [state, action, pending] = useActionState(createWorkspace, {
     error: "",
@@ -23,6 +24,25 @@ export function WorkspaceOnboarding() {
         <h1 id="workspace-title">Create Your Business</h1>
         <p>Choose a name and address. We’ll set up the rest.</p>
         <form action={action} className="servqo-auth-form" aria-busy={pending}>
+          <label htmlFor="business-type">
+            Business type
+            <select
+              id="business-type"
+              name="businessType"
+              defaultValue="cafe"
+              disabled={pending}
+            >
+              {Object.entries(businessTypes).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <small>
+              Recommends modules. You can change modules later. Appointments and
+              cake pre-orders are coming soon.
+            </small>
+          </label>
           {state.error && (
             <p className="notice error" role="alert">
               {state.error}
@@ -38,7 +58,7 @@ export function WorkspaceOnboarding() {
             <input
               id="business-name"
               name="name"
-              placeholder="Your café name"
+              placeholder="Your business name"
               value={name}
               onChange={(event) => setName(event.target.value)}
               minLength={2}
@@ -53,7 +73,7 @@ export function WorkspaceOnboarding() {
             <input
               id="business-slug"
               name="slug"
-              placeholder="your-cafe"
+              placeholder="your-business"
               value={slug}
               onChange={(event) => setSlug(event.target.value)}
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
@@ -66,7 +86,7 @@ export function WorkspaceOnboarding() {
               spellCheck={false}
             />
             <small>
-              /sites/{slug || "your-cafe"} · Lowercase letters, numbers,
+              /sites/{slug || "your-business"} · Lowercase letters, numbers,
               hyphens.
             </small>
           </label>

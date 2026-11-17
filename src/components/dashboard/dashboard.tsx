@@ -29,6 +29,8 @@ import {
   Trash2,
 } from "lucide-react";
 import type { DashboardData as Data } from "./types";
+import { ModuleStore } from "./module-store";
+import { moduleAccess } from "@/lib/business-modules";
 import { MenuManager } from "./menu-manager";
 import { OverviewStats } from "./overview-stats";
 import { DeleteMediaDialog } from "./delete-media-dialog";
@@ -48,7 +50,7 @@ export function Dashboard({
 }) {
   const router = useRouter();
   const access = subscriptionAccess(data.subscription);
-  const [tab, setTab] = useState(initialTab);
+  const tab = initialTab;
   const [sidebar, setSidebar] = useState(false);
   const sidebarTrigger = useRef<HTMLButtonElement>(null);
   const closeSidebar = useCallback(() => {
@@ -62,6 +64,8 @@ export function Dashboard({
     setPageId,
     workingLayouts,
     setWorkingLayouts,
+    savedLayouts,
+    setSavedLayouts,
   } = useMerchantWorkspace();
   const [notice, setNotice] = useState("");
   const [deleteAsset, setDeleteAsset] = useState<Data["media"][number] | null>(
@@ -72,10 +76,20 @@ export function Dashboard({
   const [pending, startTransition] = useTransition();
   const page = data.pages.find((p) => p.id === pageId) ?? data.pages[0];
   const workingSections = page ? (workingLayouts[page.id] ?? page.draft) : [];
-  const hasUnsavedChanges = data.pages.some(
-    (p) =>
-      JSON.stringify(workingLayouts[p.id] ?? p.draft) !==
-      JSON.stringify(p.draft),
+  useEffect(() => {
+    if (!data.pages.length) return;
+    setSavedLayouts((previous) => {
+      const next = { ...previous };
+      for (const page of data.pages) next[page.id] = page.draft;
+      return next;
+    });
+  }, [data.pages, setSavedLayouts]);
+  const hasUnsavedChanges = Object.entries(workingLayouts).some(
+    ([id, sections]) => {
+      const saved =
+        data.pages.find((page) => page.id === id)?.draft ?? savedLayouts[id];
+      return !saved || JSON.stringify(sections) !== JSON.stringify(saved);
+    },
   );
   useEffect(() => {
     const guard = (event: BeforeUnloadEvent) => {
@@ -112,26 +126,19 @@ export function Dashboard({
     });
   }
   function navigate(next: string) {
-    setTab(next);
     setSidebar(false);
     setNotice("");
     const destination = navigationForView(next);
-    if (destination?.href && window.location.pathname !== destination.href)
-      window.history.pushState(null, "", destination.href);
-    if (next === "Preview / Publish") setPreview(true);
+    if (destination?.href) router.push(destination.href);
   }
-  useEffect(() => {
-    const restoreNavigation = () => {
-      const item = navigationForPath(window.location.pathname);
-      if (item?.view) {
-        setTab(item.view);
-        setSidebar(false);
-        setPreview(item.view === "Preview / Publish");
-      }
-    };
-    window.addEventListener("popstate", restoreNavigation);
-    return () => window.removeEventListener("popstate", restoreNavigation);
-  }, []);
+  const canWebsite =
+    data.navigationCapabilities.includes("website:view") &&
+    moduleAccess("website", data.modules) === "enabled";
+  const canReport = data.navigationCapabilities.includes("reports:view");
+  function previewWebsite() {
+    if (data.pages.length) setPreview(true);
+    else navigate("Preview / Publish");
+  }
   const isEditor = tab === "Website Editor" || tab === "Preview / Publish";
   const currentNavigation = navigationForView(tab);
   const currentGroup = groupForView(tab);
@@ -149,6 +156,8 @@ export function Dashboard({
         open={sidebar}
         dark={dark}
         capabilities={data.navigationCapabilities}
+        businessType={data.businessType}
+        modules={data.modules}
         onNavigate={navigate}
         onClose={closeSidebar}
         onThemeToggle={() => setDark(!dark)}
@@ -171,29 +180,37 @@ export function Dashboard({
             <b>{currentNavigation?.label ?? tab}</b>
           </div>
           <div className="topbar-actions">
-            <button
-              className="button compact subscription-badge"
-              onClick={() => navigate("Subscription & Billing")}
-            >
-              {access.status === "trialing"
-                ? `Trial · ${access.remainingDays} days left`
-                : access.status.replaceAll("_", " ")}
-            </button>
-            <span className="live-label">
-              <span className="status-dot" />
-              {page?.published ? "Website live" : "Draft website"}
-            </span>
-            <button className="button compact" onClick={() => setPreview(true)}>
-              <EyeIcon />
-              Preview website <ArrowUpRight size={13} />
-            </button>
-            <button
-              className="button primary compact"
-              onClick={() => navigate("Website Editor")}
-            >
-              {tab === "Website Editor" ? "Editing website" : "Open editor"}{" "}
-              <ArrowUpRight size={14} />
-            </button>
+            {data.navigationCapabilities.includes("settings:view") && (
+              <button
+                className="button compact subscription-badge"
+                onClick={() => navigate("Subscription & Billing")}
+              >
+                {access.status === "trialing"
+                  ? `Trial · ${access.remainingDays} days left`
+                  : access.status.replaceAll("_", " ")}
+              </button>
+            )}
+            {canWebsite && data.pages.length > 0 && (
+              <span className="live-label">
+                <span className="status-dot" />
+                {page?.published ? "Website live" : "Draft website"}
+              </span>
+            )}
+            {canWebsite && (
+              <button className="button compact" onClick={previewWebsite}>
+                <EyeIcon />
+                Preview website <ArrowUpRight size={13} />
+              </button>
+            )}
+            {canWebsite && (
+              <button
+                className="button primary compact"
+                onClick={() => navigate("Website Editor")}
+              >
+                {tab === "Website Editor" ? "Editing website" : "Open editor"}{" "}
+                <ArrowUpRight size={14} />
+              </button>
+            )}
             <span className="user-avatar top-avatar">
               {data.email.slice(0, 1).toUpperCase()}
             </span>
@@ -227,6 +244,17 @@ export function Dashboard({
               </button>
             </div>
           )}
+          {tab === "Business Modules" && (
+            <ModuleStore
+              merchantId={data.business.id}
+              type={data.businessType}
+              modules={data.modules}
+              canConfigure={data.navigationCapabilities.includes(
+                "modules:manage",
+              )}
+              canWrite={access.allowed}
+            />
+          )}
           {tab === "Subscription & Billing" && (
             <SubscriptionPanel
               subscription={data.subscription}
@@ -254,57 +282,61 @@ export function Dashboard({
                 </h1>
               </div>
               <div className="overview-grid overview-summary">
-                <OverviewStats
-                  merchantId={data.business.id}
-                  products={data.products.length}
-                  available={data.products.filter((p) => p.available).length}
-                  collection={
-                    catalog.filter(
-                      (d) => !d.premium || data.unlocked.includes(d.key),
-                    ).length
-                  }
-                />
-                <div className="website-card">
-                  <div className="card-title">
-                    <div>
-                      <span className="small-icon">
-                        <Globe size={18} />
+                {canReport && (
+                  <OverviewStats
+                    merchantId={data.business.id}
+                    products={data.products.length}
+                    available={data.products.filter((p) => p.available).length}
+                    collection={
+                      catalog.filter(
+                        (d) => !d.premium || data.unlocked.includes(d.key),
+                      ).length
+                    }
+                  />
+                )}
+                {canWebsite && (
+                  <div className="website-card">
+                    <div className="card-title">
+                      <div>
+                        <span className="small-icon">
+                          <Globe size={18} />
+                        </span>
+                        <h3>Your website</h3>
+                      </div>
+                      <span className="pill">
+                        <span className="status-dot" />
+                        {page?.published ? "Published" : "Draft"}
                       </span>
-                      <h3>Your website</h3>
                     </div>
-                    <span className="pill">
-                      <span className="status-dot" />
-                      {page?.published ? "Published" : "Draft"}
-                    </span>
+                    <div className="website-snapshot">
+                      <div className="snapshot-browser">
+                        <i />
+                        <i />
+                        <i />
+                        <span>/sites/{data.business.slug}</span>
+                      </div>
+                      <div className="snapshot-inner">
+                        <WebsiteRenderer
+                          sections={page?.draft.slice(0, 2) ?? []}
+                          business={data.business}
+                          products={data.products}
+                        />
+                      </div>
+                    </div>
+                    <div className="website-card-footer">
+                      <div>
+                        <b>{data.business.name}</b>
+                        <small>/sites/{data.business.slug}</small>
+                      </div>
+                      <button
+                        className="button compact"
+                        onClick={() => setPreview(true)}
+                      >
+                        Preview <ArrowUpRight size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="website-snapshot">
-                    <div className="snapshot-browser">
-                      <i />
-                      <i />
-                      <i />
-                      <span>/sites/{data.business.slug}</span>
-                    </div>
-                    <div className="snapshot-inner">
-                      <WebsiteRenderer
-                        sections={page?.draft.slice(0, 2) ?? []}
-                        business={data.business}
-                        products={data.products}
-                      />
-                    </div>
-                  </div>
-                  <div className="website-card-footer">
-                    <div>
-                      <b>{data.business.name}</b>
-                      <small>/sites/{data.business.slug}</small>
-                    </div>
-                    <button
-                      className="button compact"
-                      onClick={() => setPreview(true)}
-                    >
-                      Preview <ArrowUpRight size={14} />
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
               <div className="section-heading">
                 <div>
@@ -339,22 +371,32 @@ export function Dashboard({
                     target: "Website Editor",
                     color: "lavender",
                   },
-                ].map(({ icon: Icon, ...item }) => (
-                  <article className="step-card" key={item.label}>
-                    <span className={`step-icon ${item.color}`}>
-                      <Icon size={22} />
-                    </span>
-                    <h3>{item.label}</h3>
-                    <p>{item.text}</p>
-                    <button
-                      className="text-button"
-                      onClick={() => navigate(item.target)}
-                    >
-                      {item.action}
-                      <ArrowUpRight size={14} />
-                    </button>
-                  </article>
-                ))}
+                ]
+                  .filter((item) => {
+                    const nav = navigationForView(item.target);
+                    return (
+                      nav?.requires &&
+                      data.navigationCapabilities.includes(nav.requires) &&
+                      (!nav.moduleKey ||
+                        moduleAccess(nav.moduleKey, data.modules) === "enabled")
+                    );
+                  })
+                  .map(({ icon: Icon, ...item }) => (
+                    <article className="step-card" key={item.label}>
+                      <span className={`step-icon ${item.color}`}>
+                        <Icon size={22} />
+                      </span>
+                      <h3>{item.label}</h3>
+                      <p>{item.text}</p>
+                      <button
+                        className="text-button"
+                        onClick={() => navigate(item.target)}
+                      >
+                        {item.action}
+                        <ArrowUpRight size={14} />
+                      </button>
+                    </article>
+                  ))}
               </div>
               <div className="bottom-note">
                 <span>SERVQO · Business overview</span>
@@ -621,61 +663,73 @@ export function Dashboard({
                   )
                 }
               >
-                <h3>Business information</h3>
-                <label>
-                  Business name
-                  <input
-                    name="name"
-                    defaultValue={data.business.name}
-                    minLength={2}
-                    maxLength={100}
-                    required
-                  />
-                </label>
-                <label>
-                  Website description
-                  <textarea
-                    name="description"
-                    defaultValue={data.business.description}
-                    maxLength={1000}
-                  />
-                </label>
-                <label>
-                  Address
-                  <input
-                    name="address"
-                    defaultValue={data.business.address}
-                    maxLength={300}
-                  />
-                </label>
-                <label>
-                  Opening hours
-                  <textarea
-                    name="hours"
-                    defaultValue={data.business.hours}
-                    maxLength={300}
-                  />
-                </label>
-                <label>
-                  WhatsApp business number
-                  <input
-                    name="phone"
-                    defaultValue={data.business.phone}
-                    placeholder="60123456789"
-                    pattern="[0-9]{0,15}"
-                  />
-                  <small>
-                    Include country code, digits only. Leave empty to disable
-                    WhatsApp ordering.
-                  </small>
-                </label>
-                <label>
-                  Public website address
-                  <input value={`/sites/${data.business.slug}`} readOnly />
-                </label>
-                <button className="button primary" disabled={pending}>
-                  {pending ? "Saving…" : "Save changes"}
-                </button>
+                <fieldset
+                  disabled={
+                    !data.navigationCapabilities.includes("business:manage")
+                  }
+                  style={{
+                    border: 0,
+                    margin: 0,
+                    padding: 0,
+                    display: "contents",
+                  }}
+                >
+                  <h3>Business information</h3>
+                  <label>
+                    Business name
+                    <input
+                      name="name"
+                      defaultValue={data.business.name}
+                      minLength={2}
+                      maxLength={100}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Website description
+                    <textarea
+                      name="description"
+                      defaultValue={data.business.description}
+                      maxLength={1000}
+                    />
+                  </label>
+                  <label>
+                    Address
+                    <input
+                      name="address"
+                      defaultValue={data.business.address}
+                      maxLength={300}
+                    />
+                  </label>
+                  <label>
+                    Opening hours
+                    <textarea
+                      name="hours"
+                      defaultValue={data.business.hours}
+                      maxLength={300}
+                    />
+                  </label>
+                  <label>
+                    WhatsApp business number
+                    <input
+                      name="phone"
+                      defaultValue={data.business.phone}
+                      placeholder="60123456789"
+                      pattern="[0-9]{0,15}"
+                    />
+                    <small>
+                      Include country code, digits only. Leave empty to disable
+                      WhatsApp ordering.
+                    </small>
+                  </label>
+                  <label>
+                    Public website address
+                    <input value={`/sites/${data.business.slug}`} readOnly />
+                  </label>
+                  <button className="button primary" disabled={pending}>
+                    {pending ? "Saving…" : "Save changes"}
+                  </button>
+                </fieldset>
               </form>
             </>
           )}

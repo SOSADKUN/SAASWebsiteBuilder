@@ -23,22 +23,32 @@ export const profiles = pgTable("user_profiles", {
   role: text("role").notNull().default("merchant"),
   createdAt: created(),
 });
-export const merchants = pgTable("merchants", {
-  id: id(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  description: text("description").notNull().default(""),
-  address: text("address").notNull().default(""),
-  hours: text("hours").notNull().default(""),
-  phone: text("phone").notNull().default(""),
-  trialStartedAt: timestamp("trial_started_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true })
-    .default(sql`CURRENT_TIMESTAMP + interval '336 hours'`)
-    .notNull(),
-  createdAt: created(),
-});
+export const merchants = pgTable(
+  "merchants",
+  {
+    id: id(),
+    businessType: text("business_type").notNull().default("cafe"),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    description: text("description").notNull().default(""),
+    address: text("address").notNull().default(""),
+    hours: text("hours").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    trialStartedAt: timestamp("trial_started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    trialEndsAt: timestamp("trial_ends_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP + interval '336 hours'`)
+      .notNull(),
+    createdAt: created(),
+  },
+  (t) => [
+    check(
+      "merchant_business_type_valid",
+      sql`${t.businessType} IN ('cafe','bakery','nail_salon','hair_salon','beauty_studio','other')`,
+    ),
+  ],
+);
 export const memberships = pgTable(
   "merchant_users",
   {
@@ -457,5 +467,50 @@ export const orderEvents = pgTable(
     }),
     uniqueIndex("pos_event_version_unique").on(t.orderId, t.version),
     index("pos_event_order").on(t.merchantId, t.orderId),
+  ],
+);
+
+// Business module licenses are separate from website component ownership.
+export const moduleDefinitions = pgTable("business_module_definitions", {
+  key: text("key").primaryKey(),
+  available: boolean("available").notNull().default(false),
+  pricing: jsonb("pricing")
+    .$type<{ mode: "included" | "demo"; monthlyExample?: number }>()
+    .notNull()
+    .default({ mode: "demo" }),
+});
+export const merchantModules = pgTable(
+  "merchant_modules",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id),
+    moduleKey: text("module_key")
+      .notNull()
+      .references(() => moduleDefinitions.key),
+    enabled: boolean("enabled").notNull().default(false),
+  },
+  (t) => [uniqueIndex("merchant_module_unique").on(t.merchantId, t.moduleKey)],
+);
+export const moduleEntitlements = pgTable(
+  "business_module_entitlements",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id),
+    moduleKey: text("module_key")
+      .notNull()
+      .references(() => moduleDefinitions.key),
+    source: text("source").notNull().default("included"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("module_entitlement_unique").on(t.merchantId, t.moduleKey),
+    check(
+      "module_source_valid",
+      sql`${t.source} IN ('included','legacy','provider','admin')`,
+    ),
   ],
 );

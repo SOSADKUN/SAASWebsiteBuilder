@@ -24,7 +24,7 @@ describe("merchant data export", () => {
       ),
     );
     expect(response.status).toBe(200);
-    expect(mocks.authorize).toHaveBeenCalledWith(id, "workspace:view");
+    expect(mocks.authorize).toHaveBeenCalledWith(id, "data:export");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("content-disposition")).toContain("attachment");
     expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), {

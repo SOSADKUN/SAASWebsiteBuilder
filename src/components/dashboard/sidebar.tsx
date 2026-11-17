@@ -17,15 +17,15 @@ import {
   Coffee,
 } from "lucide-react";
 import {
-  navigationGroups,
-  primaryNavigation,
   isNavigationVisible,
+  merchantNavigation,
   type NavigationItem,
   type DashboardView,
 } from "@/lib/dashboard-navigation";
 import type { MerchantCapability } from "@/lib/merchant-capabilities";
 import { signOut } from "@/server/actions";
 import { Brand } from "@/components/brand";
+import type { BusinessType, ModuleState } from "@/lib/business-modules";
 type Outlet = { id: string; name: string };
 type Props = {
   businessName: string;
@@ -41,6 +41,8 @@ type Props = {
   outlets?: Outlet[];
   currentOutletId?: string;
   onOutletChange?: (id: string) => void;
+  businessType?: BusinessType;
+  modules?: readonly ModuleState[];
 };
 const icons = {
   maintenance: SlidersHorizontal,
@@ -62,7 +64,10 @@ export function MerchantSidebar({
   outlets,
   currentOutletId,
   onOutletChange,
+  businessType,
+  modules,
 }: Props) {
+  const navigation = merchantNavigation(businessType, modules);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     website: true,
   });
@@ -115,6 +120,7 @@ export function MerchantSidebar({
       event.button !== 0
     )
       return;
+    if (!item.view) return;
     event.preventDefault();
     if (item.view) onNavigate(item.view);
   }
@@ -204,7 +210,7 @@ export function MerchantSidebar({
           <span className="nav-label">YOUR BUSINESS</span>
           <nav aria-label="Main navigation">
             <div className="primary-platform-nav">
-              {primaryNavigation.map((item) =>
+              {navigation.primary.map((item) =>
                 item.comingSoon ? (
                   <div
                     key={item.id}
@@ -224,7 +230,7 @@ export function MerchantSidebar({
                 ),
               )}
             </div>
-            {navigationGroups.map((group) => {
+            {navigation.groups.map((group) => {
               const visible = group.children.filter((item) =>
                 isNavigationVisible(item, capabilities),
               );
@@ -278,7 +284,7 @@ export function MerchantSidebar({
             </form>
           </div>
           <span className="platform-credit">
-            Powered by <b>SERVQO</b> <span>F&B WORKSPACE</span>
+            Powered by <b>SERVQO</b> <span>BUSINESS WORKSPACE</span>
           </span>
         </footer>
       </aside>

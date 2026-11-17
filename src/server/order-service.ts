@@ -311,7 +311,7 @@ export async function operationsSnapshot(
 ): Promise<OperationsSnapshot> {
   await authorize(
     z.uuid().parse(merchantId),
-    withMenu ? "pos:operate" : "orders:manage",
+    withMenu ? "pos:operate" : "orders:view",
   );
   const database = db();
   const active = or(

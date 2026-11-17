@@ -282,7 +282,7 @@ describe("PostgreSQL migrations and tenant RLS", () => {
       tablename: string;
       rowsecurity: boolean;
     }>("SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname='public'");
-    expect(result.rows).toHaveLength(22);
+    expect(result.rows).toHaveLength(25);
     expect(result.rows.every((t) => t.rowsecurity)).toBe(true);
   });
   it("only lets each merchant read its own business and menu records", async () => {

@@ -18,6 +18,8 @@ import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
 import { registrationErrorMessage } from "@/lib/auth-errors";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
+import { businessTypes } from "@/lib/business-modules";
+import { initialBusinessLayout } from "@/lib/business-defaults";
 import { requireSubscription } from "@/lib/subscription-service";
 import {
   initialLayout,
@@ -92,6 +94,14 @@ async function createBusinessRecord(
 ) {
   const u = await trace.step("authentication", () => user());
   const name = z.string().min(2).max(100).parse(form.get("name"));
+  const businessType = z
+    .enum(
+      Object.keys(businessTypes) as [
+        keyof typeof businessTypes,
+        ...Array<keyof typeof businessTypes>,
+      ],
+    )
+    .parse(form.get("businessType") ?? "cafe");
   const slug = z
     .string()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
@@ -113,7 +123,7 @@ async function createBusinessRecord(
           .onConflictDoNothing(),
       );
       const [merchant] = await trace.step("merchant", () =>
-        tx.insert(s.merchants).values({ name, slug }).returning(),
+        tx.insert(s.merchants).values({ name, slug, businessType }).returning(),
       );
       const claims = await trace.step("trial_claim", () =>
         tx
@@ -139,16 +149,23 @@ async function createBusinessRecord(
           merchantId: merchant.id,
           websiteId: website.id,
           title: "Home",
-          draft: initialLayout(name),
+          draft: initialBusinessLayout(name, businessType),
         }),
       );
       await trace.step("categories", () =>
         tx
           .insert(s.categories)
           .values(
-            ["Coffee", "Tea", "Pastries", "Food", "Other"].map(
-              (name, position) => ({ merchantId: merchant.id, name, position }),
-            ),
+            (businessType === "cafe"
+              ? ["Coffee", "Tea", "Pastries", "Food", "Other"]
+              : businessType === "bakery"
+                ? ["Cakes", "Bread", "Pastries", "Other"]
+                : ["Retail products", "Other"]
+            ).map((name, position) => ({
+              merchantId: merchant.id,
+              name,
+              position,
+            })),
           ),
       );
     }),
@@ -460,7 +477,7 @@ export async function updateBusiness(merchantId: string, form: FormData) {
   revalidatePath("/dashboard");
 }
 export async function upload(merchantId: string, form: FormData) {
-  const url = await uploadAssetRecord(merchantId, form, "website:manage");
+  const url = await uploadAssetRecord(merchantId, form, "media:manage");
   revalidatePath("/dashboard");
   return url;
 }
@@ -490,7 +507,7 @@ export async function uploadMenuProductImage(
 async function uploadAssetRecord(
   merchantId: string,
   form: FormData,
-  capability: "website:manage" | "menu:manage",
+  capability: "media:manage" | "menu:manage",
 ) {
   await authorize(z.uuid().parse(merchantId), capability);
   await requireSubscription(merchantId);

@@ -196,6 +196,7 @@ export function PosScreen({
               "FORBIDDEN",
               "SETUP_PENDING",
               "SUBSCRIPTION",
+              "MODULE_UNAVAILABLE",
             ].includes(result.code)
           )
             update((current) => ({ ...current, uncertain: false }));

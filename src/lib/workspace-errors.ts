@@ -50,6 +50,16 @@ export function workspaceErrorCode(error: unknown): string {
   return "UNKNOWN";
 }
 export function dashboardErrorMessage(error: unknown) {
+  if (
+    error instanceof Error &&
+    error.message === "Business module is disabled or not entitled"
+  )
+    return "This business module is disabled or its license has expired. Return to Overview or ask the owner to check Store > Business Modules.";
+  if (
+    error instanceof Error &&
+    error.message === "Workspace permission required"
+  )
+    return "Your workspace role does not have access to this screen. Return to Overview or contact the business owner.";
   const code = workspaceErrorCode(error);
   if (["42P01", "42703"].includes(code))
     return "Your workspace needs a server database update. Contact support so the pending migrations can be applied.";

@@ -10,6 +10,8 @@ import {
 import type { Section } from "@/lib/models";
 type State = {
   workingLayouts: Record<string, Section[]>;
+  savedLayouts: Record<string, Section[]>;
+  setSavedLayouts: Dispatch<SetStateAction<Record<string, Section[]>>>;
   setWorkingLayouts: Dispatch<SetStateAction<Record<string, Section[]>>>;
   designHistory: Record<string, string[]>;
   setDesignHistory: Dispatch<SetStateAction<Record<string, string[]>>>;
@@ -29,6 +31,9 @@ export function MerchantWorkspaceProvider({
   const [workingLayouts, setWorkingLayouts] = useState<
     Record<string, Section[]>
   >({});
+  const [savedLayouts, setSavedLayouts] = useState<Record<string, Section[]>>(
+    {},
+  );
   const [designHistory, setDesignHistory] = useState<Record<string, string[]>>(
     {},
   );
@@ -38,6 +43,8 @@ export function MerchantWorkspaceProvider({
     <WorkspaceContext.Provider
       value={{
         workingLayouts,
+        savedLayouts,
+        setSavedLayouts,
         setWorkingLayouts,
         designHistory,
         setDesignHistory,

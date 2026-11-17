@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { memberships, profiles } from "@/db/schema";
+import { capabilityModules } from "./business-modules";
+import { requireModule } from "@/server/module-service";
 import {
   getSupabaseConfiguration,
   hasSupabaseConfiguration,
@@ -43,7 +45,7 @@ export async function user() {
 }
 export async function authorize(
   merchantId: string,
-  capability?: MerchantCapability,
+  capability: MerchantCapability,
 ) {
   const u = await user();
   const membership = await db().query.memberships.findFirst({
@@ -53,8 +55,10 @@ export async function authorize(
     ),
   });
   if (!membership) throw new Error("Business access denied");
-  if (capability && !roleHasCapability(membership.role, capability))
+  if (!roleHasCapability(membership.role, capability))
     throw new Error("Workspace permission required");
+  const moduleKey = capabilityModules[capability];
+  if (moduleKey) await requireModule(merchantId, moduleKey);
   return u;
 }
 export async function admin() {

@@ -58,6 +58,7 @@ describe("merchant trial creation boundary", () => {
     expect(mocks.inserted).toHaveBeenCalledWith(merchants, {
       name: "My cafe",
       slug: "my-cafe",
+      businessType: "cafe",
     });
   });
   it("rejects a repeated business trial claim inside the creation transaction", async () => {

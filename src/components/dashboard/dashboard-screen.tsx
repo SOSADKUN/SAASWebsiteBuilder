@@ -17,7 +17,11 @@ export async function DashboardScreen({
   const trace = workspaceTrace("dashboard.load");
   let data;
   try {
-    data = await dashboardData(requiredCapability, trace);
+    data = await dashboardData(
+      requiredCapability,
+      trace,
+      initialTab ?? "Overview",
+    );
   } catch (error) {
     // Preserve Next authentication redirects and other framework control flow.
     unstable_rethrow(error);
@@ -40,7 +44,11 @@ export async function DashboardScreen({
     );
   }
   return data ? (
-    <Dashboard data={data} initialTab={initialTab} />
+    <Dashboard
+      key={initialTab ?? "Overview"}
+      data={data}
+      initialTab={initialTab}
+    />
   ) : (
     <WorkspaceOnboarding />
   );
