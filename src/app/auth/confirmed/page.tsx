@@ -3,7 +3,7 @@ import { supabase } from "@/lib/auth";
 import { safeAuthDestination } from "@/lib/auth-redirect";
 import { AuthResult } from "@/components/auth/auth-result";
 export const metadata: Metadata = {
-  title: "Account activation | SERVQO",
+  title: "Account activation | SERVQOO",
   robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";

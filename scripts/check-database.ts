@@ -12,6 +12,11 @@ import { definitions } from "../src/lib/models";
 import { getSupabaseConfiguration } from "../src/lib/supabase-config";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import {
+  privateStorageTables,
+  privateStoragePrivilegesSql,
+  privateStorageIssues,
+} from "./private-storage-check";
+import {
   matchesForeignKey,
   type DatabaseForeignKey,
 } from "./foreign-key-check";
@@ -53,6 +58,10 @@ async function main() {
           cmd: string;
         }[]
       >`SELECT schemaname,tablename,policyname,cmd FROM pg_policies WHERE schemaname IN ('public','storage')`;
+      const privatePrivileges = await sql.unsafe<
+        { table_name: string; role_name: string; privilege: string }[]
+      >(privateStoragePrivilegesSql);
+      issues.push(...privateStorageIssues(privatePrivileges, policies));
       for (const table of Object.values(schema)) {
         const name = getTableName(table);
         const live = tables.find((t) => t.table_name === name);
@@ -155,6 +164,7 @@ async function main() {
         const name = getTableName(table);
         if (
           tables.some((t) => t.table_name === name) &&
+          !privateStorageTables.some((privateName) => privateName === name) &&
           !policies.some(
             (p) =>
               p.schemaname === "public" &&

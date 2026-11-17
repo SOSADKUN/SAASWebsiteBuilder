@@ -1,16 +1,17 @@
 "use server";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { authorize } from "@/lib/auth";
-import { requireSubscription } from "@/lib/subscription-service";
+
 import {
   businessModules,
   businessTypes,
   moduleAccess,
+  moduleReadable,
 } from "@/lib/business-modules";
 import {
   systemServices,
@@ -44,7 +45,7 @@ async function applyModuleChanges(
         )
       )
         throw new Error("Module unavailable");
-      await requireSubscription(merchantId);
+
       return db().transaction(async (tx) => {
         const [merchant] = await tx
           .select()
@@ -54,7 +55,7 @@ async function applyModuleChanges(
         if (!merchant || merchant.onboardingStep !== "complete")
           throw new Error("Finish business setup first.");
         const states = await merchantModuleState(merchantId, tx);
-        for (const key of keys) {
+        for (const key of enabled ? keys : []) {
           const state = states.find((m) => m.key === key);
           if (
             !state?.entitled ||
@@ -75,8 +76,8 @@ async function applyModuleChanges(
           businessModules.some(
             (m) =>
               !keys.includes(m.key) &&
-              moduleAccess(m.key, states) === "enabled" &&
-              moduleAccess(m.key, next) !== "enabled",
+              moduleReadable(m.key, states) &&
+              !moduleReadable(m.key, next),
           )
         )
           throw new Error("Disable dependent modules first");
@@ -84,6 +85,29 @@ async function applyModuleChanges(
         // and POS removal must satisfy the order-source requirement.
         const sourceError = configurationSourceError(next, keys, enabled);
         if (sourceError) throw new Error(sourceError);
+        if (
+          !enabled &&
+          keys.some((k) => ["pos", "fnb_orders", "kitchen_queue"].includes(k))
+        ) {
+          const [active] = await tx
+            .select({ id: s.orders.id })
+            .from(s.orders)
+            .where(
+              and(
+                eq(s.orders.merchantId, merchantId),
+                or(
+                  inArray(s.orders.status, ["pending", "preparing", "ready"]),
+                  and(
+                    eq(s.orders.status, "cancelled"),
+                    isNull(s.orders.cancellationAcknowledgedAt),
+                  ),
+                ),
+              ),
+            )
+            .limit(1);
+          if (active)
+            throw new Error("Finish active tickets before disabling services");
+        }
         if (!enabled && !confirmed) {
           const tables = [];
           if (
@@ -130,7 +154,7 @@ async function applyModuleChanges(
       ok: false as const,
       confirmationRequired: false as const,
       error:
-        "Could not change this service. Check its license, trial and dependencies. Orders needs POS; disable dependent services first. Finish business setup before managing services.",
+        "Could not change this service. Check its service trial/license and dependencies. Finish active tickets and disable dependent services first. Finish business setup before managing services.",
       reference: trace.reference,
     };
   }

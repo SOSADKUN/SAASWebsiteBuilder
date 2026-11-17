@@ -8,7 +8,7 @@ export function Brand({ className = "" }: { className?: string }) {
         height="48"
         alt=""
       />
-      <span>SERVQO</span>
+      <span>SERVQOO</span>
     </span>
   );
 }

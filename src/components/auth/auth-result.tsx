@@ -18,14 +18,14 @@ export function AuthResult({
     },
     email: {
       title: "Check your inbox",
-      text: "One more step! Open the confirmation email from SERVQO and click the activation link to finish creating your account.",
+      text: "One more step! Open the confirmation email from SERVQOO and click the activation link to finish creating your account.",
       note: "No email yet? Check your spam or junk folder and allow a few minutes for delivery.",
       href: "/login",
       action: "Back to sign in",
     },
     success: {
       title: "Your account is activated!",
-      text: "Your email is confirmed. Welcome to SERVQO — you’re ready to start building your business workspace.",
+      text: "Your email is confirmed. Welcome to SERVQOO — you’re ready to start building your business workspace.",
       note: "Your next great service starts here.",
       href: next,
       action: "Continue to your workspace",

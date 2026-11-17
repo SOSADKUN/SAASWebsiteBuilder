@@ -58,7 +58,14 @@ export async function authorize(
   if (!roleHasCapability(membership.role, capability))
     throw new Error("Workspace permission required");
   const moduleKey = capabilityModules[capability];
-  if (moduleKey) await requireModule(merchantId, moduleKey);
+  if (moduleKey)
+    await requireModule(
+      merchantId,
+      moduleKey,
+      capability.endsWith(":manage") && capability !== "orders:manage"
+        ? "write"
+        : "read",
+    );
   return u;
 }
 export async function admin() {

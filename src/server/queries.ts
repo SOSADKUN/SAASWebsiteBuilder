@@ -6,7 +6,7 @@ import * as s from "@/db/schema";
 import { user } from "@/lib/auth";
 import { merchantModuleState } from "./module-service";
 import {
-  moduleAccess,
+  moduleReadable,
   businessType,
   capabilityModules,
 } from "@/lib/business-modules";
@@ -82,9 +82,7 @@ export async function loadMerchantContext(
     business.onboardingStep && business.onboardingStep !== "complete";
   if (
     !onboarding &&
-    requiredModules.some(
-      (key) => key && moduleAccess(key, modules) !== "enabled",
-    )
+    requiredModules.some((key) => key && !moduleReadable(key, modules))
   )
     throw new Error("Business module is disabled or not entitled");
   const profile = onboarding

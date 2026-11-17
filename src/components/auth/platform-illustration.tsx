@@ -1,7 +1,7 @@
 import { Store, Package, ChartNoAxesColumn, ShoppingBag } from "lucide-react";
 export function PlatformIllustration() {
   return (
-    <aside className="auth-platform" aria-label="SERVQO platform">
+    <aside className="auth-platform" aria-label="SERVQOO platform">
       <div className="auth-platform-copy">
         <span className="auth-accent" />
         <h2>

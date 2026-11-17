@@ -1,37 +1,20 @@
-# Merchant workspace navigation
+# SERVQOO navigation
 
-The sidebar is configured in `src/lib/dashboard-navigation.ts`, rendered by `src/components/dashboard/sidebar.tsx`, and shared across the dashboard. It distinguishes implemented destinations from Coming Soon entries. Planned destinations have neither a working view nor an href; the module route loader returns 404 for unregistered paths.
+The [Project Guide](SERVQOO_PROJECT_GUIDE.md) is the current architecture/access reference. Navigation is declared in `src/lib/dashboard-navigation.ts`, rendered by the shared sidebar and checked again by protected loaders/actions.
 
-| Module               | Implemented destinations                                                                                                                |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview             | `/dashboard`                                                                                                                            |
-| Maintenance          | `/dashboard/maintenance/menu`, `/dashboard/maintenance/business`                                   |
-| Café Website Builder | `/dashboard/website/editor`, `/dashboard/website/pages`, `/dashboard/website/media`, `/dashboard/website/publish` |
-| Settings             | `/dashboard/settings/general` (existing workspace appearance controls)                                                                  |
+| Area            | Current destinations                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Public          | `/`, `/pricing`, `/demo`, `/purchase`, `/contact`, `/legal/[document]`                                            |
+| Overview        | `/dashboard`                                                                                                      |
+| System Services | `/dashboard/pos`, `/dashboard/orders`; owner plus opens `/dashboard/store/modules`                                |
+| Maintenance     | `/dashboard/maintenance/menu`, `/dashboard/maintenance/business`                                                  |
+| Website Builder | `/dashboard/website/editor`, `/dashboard/website/pages`, `/dashboard/website/media`, `/dashboard/website/publish` |
+| Settings        | `/dashboard/settings/general`, `/dashboard/settings/billing`                                                      |
 
-The standalone Component Store and Design Gallery have been removed from navigation. Their old URLs redirect to `/dashboard/website/editor`; design preview and demo unlocking are available in editor dropdowns. The old category-management URL redirects to Menu Management.
+Actual hrefs come from the registry; these are not independent permission grants. Module/capability checks control implemented links. Enabled expired paid modules retain authorized history/fulfillment with a History badge, while new operations require current service authorization. Coming Soon modules remain discoverable but cannot activate. Unknown destinations return 404.
 
-POS / Cashier, Orders and Subscription & Billing are implemented. Employee Management, Table Management, Promotions, Staff Permissions and Security remain Coming Soon. See [POS/Orders](POS-ORDERS.md) and [editor designs](EDITOR-DESIGNS.md).
+Normal navigation uses App Router navigation and per-view server datasets. The shared layout/provider retains working editor state and unload warnings across routes. POS drafts are tab/company-scoped sessionStorage, not cross-device/offline orders. The mobile drawer retains focus/escape/return handling.
 
-## Routing and state
+Old category-management links redirect to Menu Management; old Component Store/Design Gallery links redirect to Website Editor. Keep those convention routes and legacy renderers. Retained gallery components also support visual fixtures; absence from the sidebar is not proof of dead code.
 
-`src/app/dashboard/[...module]/page.tsx` resolves only registered, implemented module URLs. New modules can replace individual branches with their own route/layout/server loaders later. The dedicated legacy gallery route redirects to the editor.
-
-Normal sidebar clicks keep the current workspace mounted and update the URL using the browser history API. Modified clicks and opening links in another tab use normal deep links. Back/forward navigation restores the selected view. The shared dashboard layout/provider retains unsaved layouts, design history, selected page and appearance when route segments or server data refresh. None of this changes draft saving or publishing semantics.
-
-## Roles and permissions
-
-The verified membership role supplies navigation capabilities on the server. Current `owner` and `editor` roles retain existing access. Unknown role policies grant no capabilities. Visibility metadata is intended as a foundation, not a substitute for server authorization.
-
-`authorize(merchantId, capability?)` retains existing tenant membership checks and supports an optional capability check. Implemented module deep-link loaders use it; existing mutation authorization remains unchanged. When adding staff roles or more restrictive policies, apply the required capability to **every** relevant server action/API as well as its loader. The Staff Permissions screen and role-assignment workflow are not implemented by this navigation change.
-
-## Sidebar behavior
-
-- Business name and configured homepage-header logo appear at the top; a café mark is the fallback.
-- The sidebar accepts optional real outlet data and a change handler. No outlet control is shown until those are supplied; there is no simulated outlet switch.
-- Groups collapse independently. The current destination and its parent group are highlighted; design selection is available inside Website Editor.
-- Navigation scrolls independently of the identity and account footer.
-- The mobile drawer has a backdrop, close button, Escape handling, focus containment/return, and a hidden offscreen state that cannot receive keyboard focus.
-- General settings reuses the existing light/dark appearance state and links to business information.
-
-Navigation itself needs no migration. The version-three header registrations require the additive migration described in [editor designs](EDITOR-DESIGNS.md).
+Owner, manager, legacy_editor, editor, cashier, kitchen and technician capabilities differ; owner/editor are not equivalent. Unknown roles get none. Staff invitations/role editing and outlets remain future work. Visibility is not a substitute for server authorization. See [current role boundaries](SERVQOO_PROJECT_GUIDE.md#4-authentication-and-company-model).

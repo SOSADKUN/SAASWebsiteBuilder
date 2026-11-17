@@ -8,7 +8,7 @@ import { AuthResult } from "@/components/auth/auth-result";
 import { safeAuthDestination } from "@/lib/auth-redirect";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Activate your account | SERVQO",
+  title: "Activate your account | SERVQOO",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
@@ -46,9 +46,9 @@ export default async function Verify({
           <MailCheck size={32} />
         </div>
         <span className="servqo-kicker">ONE LAST STEP</span>
-        <h1 id="verify-title">Activate your SERVQO account</h1>
+        <h1 id="verify-title">Activate your SERVQOO account</h1>
         <p>
-          Confirm your email address to start your next chapter with SERVQO.
+          Confirm your email address to start your next chapter with SERVQOO.
         </p>
         <small>
           Click below to securely verify your email and activate your account.

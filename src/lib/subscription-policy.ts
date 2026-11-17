@@ -34,3 +34,15 @@ export function subscriptionAccess(snapshot: SubscriptionSnapshot) {
     remainingDays: trial ? Math.ceil((ends - now) / 86_400_000) : 0,
   };
 }
+
+// A base subscription never extends the one-time System Services trial.
+export function systemTrialAccess(snapshot: SubscriptionSnapshot) {
+  const now = Date.parse(snapshot.serverNow),
+    end = Date.parse(snapshot.trialEndsAt);
+  const allowed = now >= Date.parse(snapshot.trialStartedAt) && now < end;
+  return {
+    allowed,
+    remainingDays: allowed ? Math.ceil((end - now) / 86_400_000) : 0,
+    status: allowed ? ("trialing" as const) : ("expired" as const),
+  };
+}

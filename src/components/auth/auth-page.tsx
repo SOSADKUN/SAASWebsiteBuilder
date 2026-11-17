@@ -38,13 +38,22 @@ export function AuthPage({
             <h1 id="login-title">{heading}</h1>
             <p className="servqo-auth-intro">
               {signup
-                ? "Create your SERVQO workspace."
+                ? "Create your SERVQOO workspace."
                 : forgot
                   ? "Enter your email to receive a reset link."
                   : reset
                     ? "Use at least 8 characters for your new password."
-                    : "Sign in to your SERVQO workspace."}
+                    : "Sign in to your SERVQOO workspace."}
             </p>
+            {signup && (
+              <p className="servqoo-signup-policy">
+                Permanent Free Core includes one multi-page company website.
+                Eligible implemented System Services have a one-time 14-day
+                trial from business creation. No card, no automatic
+                subscription. <Link href="/pricing">View proposed pricing</Link>
+                .
+              </p>
+            )}
             {!configured && (
               <p className="notice" role="status">
                 Authentication is not configured. Check the deployment settings.

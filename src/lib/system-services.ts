@@ -41,7 +41,7 @@ export const systemServices: readonly SystemService[] = businessModules
       ["cake_preorders", "appointments", "staff_availability"].includes(
         module.key,
       ),
-    trialEligible: module.availability === "implemented",
+    trialEligible: module.trialEligible,
     monthlyPrice: servicePricing[module.key] ?? null,
     suggestedTypes: module.suggestedTypes,
     compatibleTypes: Object.keys(businessTypes) as BusinessType[],
@@ -62,7 +62,7 @@ export const systemServices: readonly SystemService[] = businessModules
       monthlyPrice: servicePricing.orders,
       suggestedTypes: ["cafe", "bakery"],
       compatibleTypes: Object.keys(businessTypes) as BusinessType[],
-      dependencies: ["pos", "catalog"],
+      dependencies: ["pos"],
     },
   ])
   .sort((a, b) => Number(b.implemented) - Number(a.implemented));

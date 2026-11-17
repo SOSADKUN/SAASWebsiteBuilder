@@ -483,18 +483,29 @@ export const orderEvents = pgTable(
 );
 
 // Business module licenses are separate from website component ownership.
-export const moduleDefinitions = pgTable("business_module_definitions", {
-  key: text("key").primaryKey(),
-  available: boolean("available").notNull().default(false),
-  pricing: jsonb("pricing")
-    .$type<{
-      mode: "included" | "demo";
-      monthlyExample?: number;
-      currency?: "MYR";
-    }>()
-    .notNull()
-    .default({ mode: "demo" }),
-});
+export const moduleDefinitions = pgTable(
+  "business_module_definitions",
+  {
+    accessPolicy: text("access_policy").notNull().default("paid"),
+    trialEligible: boolean("trial_eligible").notNull().default(false),
+    key: text("key").primaryKey(),
+    available: boolean("available").notNull().default(false),
+    pricing: jsonb("pricing")
+      .$type<{
+        mode: "included" | "demo";
+        monthlyExample?: number;
+        currency?: "MYR";
+      }>()
+      .notNull()
+      .default({ mode: "demo" }),
+  },
+  (t) => [
+    check(
+      "module_access_policy_valid",
+      sql`${t.accessPolicy} IN ('free','paid')`,
+    ),
+  ],
+);
 export const merchantModules = pgTable(
   "merchant_modules",
   {
@@ -520,13 +531,57 @@ export const moduleEntitlements = pgTable(
       .notNull()
       .references(() => moduleDefinitions.key),
     source: text("source").notNull().default("included"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("module_entitlement_unique").on(t.merchantId, t.moduleKey),
     check(
+      "module_verified_period_valid",
+      sql`${t.verifiedAt} IS NULL OR (${t.source} IN ('provider','admin') AND ${t.expiresAt} IS NOT NULL AND ${t.expiresAt}>${t.verifiedAt})`,
+    ),
+    check(
       "module_source_valid",
       sql`${t.source} IN ('included','legacy','provider','admin')`,
     ),
+  ],
+);
+
+// Private server-only reservations. Never grant browser access to these tables.
+export const mediaReservations = pgTable("media_upload_reservations", {
+  id: uuid("id").primaryKey(),
+  merchantId: uuid("merchant_id")
+    .notNull()
+    .references(() => merchants.id, { onDelete: "cascade" }),
+  path: text("path").notNull().unique(),
+  bytes: integer("bytes").notNull(),
+  hash: text("hash").notNull(),
+  createdAt: created(),
+});
+export const storageEntitlements = pgTable("merchant_storage_entitlements", {
+  merchantId: uuid("merchant_id")
+    .primaryKey()
+    .references(() => merchants.id, { onDelete: "cascade" }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  source: text("source").notNull(),
+});
+
+// Explicit, immutable time-limited service authorization; never a paid license.
+export const moduleTrials = pgTable(
+  "merchant_module_trials",
+  {
+    id: id(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id),
+    moduleKey: text("module_key")
+      .notNull()
+      .references(() => moduleDefinitions.key),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("merchant_module_trial_unique").on(t.merchantId, t.moduleKey),
   ],
 );

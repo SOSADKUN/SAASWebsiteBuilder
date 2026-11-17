@@ -27,7 +27,7 @@ import {
   systemServices,
 } from "@/lib/system-services";
 import {
-  subscriptionAccess,
+  systemTrialAccess,
   type SubscriptionSnapshot,
 } from "@/lib/subscription-policy";
 import { SystemServicePicker } from "./system-service-picker";
@@ -91,7 +91,7 @@ export function WorkspaceOnboarding({ setup }: { setup?: Setup }) {
     "Choose your System Services",
     "Review your free trial",
   ];
-  const access = setup ? subscriptionAccess(setup.subscription) : null;
+  const access = setup ? systemTrialAccess(setup.subscription) : null;
   function save(
     run: () => Promise<{ ok: boolean; error?: string; reference?: string }>,
     next?: number,
@@ -335,9 +335,9 @@ export function WorkspaceOnboarding({ setup }: { setup?: Setup }) {
                 </strong>
               </div>
               <p className="setup-fine-print">
-                Demo prices only. Included website/catalog tools still follow
-                the current trial and subscription rules after expiry; a
-                permanent Free Plan is not available yet.
+                Dashboard, catalog, media and one multi-page website are
+                permanently free. Paid service prices are estimates; nothing is
+                automatically charged.
               </p>
               <div className="setup-actions">
                 <button
@@ -374,9 +374,7 @@ export function WorkspaceOnboarding({ setup }: { setup?: Setup }) {
                 <span className="pill">
                   {access?.status === "trialing"
                     ? "14-day free trial"
-                    : access?.status === "active"
-                      ? "Active subscription"
-                      : "Trial ended"}
+                    : "Trial ended"}
                 </span>
                 <h2>
                   {formatServicePrice(0)} <small>due now</small>
@@ -425,15 +423,13 @@ export function WorkspaceOnboarding({ setup }: { setup?: Setup }) {
                   </b>
                   {access?.status === "trialing"
                     ? ` - ${access.remainingDays} days remaining`
-                    : access?.status === "active"
-                      ? " - Your verified subscription applies."
-                      : " - Trial expired; optional service activation requires a valid subscription."}
+                    : " - Trial expired; paid services need a verified entitlement. Free Core stays available."}
                 </p>
                 <p className="setup-fine-print">
                   Estimate only, not an active paid plan. There are no automatic
-                  charges. Current subscription restrictions apply after the
-                  trial, including editing of included tools. You can return to
-                  service selection and choose core only.
+                  charges. Free Core remains available after the trial. Only new
+                  paid-service operations require a verified entitlement. You
+                  can return to service selection and choose core only.
                 </p>
               </div>
               <div className="setup-actions">

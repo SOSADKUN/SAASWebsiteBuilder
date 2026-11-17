@@ -72,7 +72,7 @@ describe("System Services selection, pricing and trial presentation", () => {
   });
   it("adds dependencies and prevents removing a required order source", () => {
     const keys = addService([], "orders");
-    expect(keys).toEqual(expect.arrayContaining(["orders", "pos", "catalog"]));
+    expect(keys).toEqual(expect.arrayContaining(["orders", "pos"]));
     expect(selectionError(keys, "cafe", modules)).toBeNull();
     expect(
       selectionError(
@@ -93,15 +93,13 @@ describe("System Services selection, pricing and trial presentation", () => {
     expect(selectionError(["pos", "pos"], "cafe", modules)).toContain("once");
     expect(
       selectionError(
-        ["catalog", "pos"],
+        ["pos"],
         "cafe",
         modules.map((m) => (m.key === "pos" ? { ...m, entitled: false } : m)),
       ),
     ).toContain("license");
     // A salon may explicitly opt into product-only retail checkout.
-    expect(
-      selectionError(["catalog", "pos"], "hair_salon", modules),
-    ).toBeNull();
+    expect(selectionError(["pos"], "hair_salon", modules)).toBeNull();
   });
   it("renders trial, near-expiry, expired and verified-paid states honestly", () => {
     const render = (snapshot: SubscriptionSnapshot) =>
@@ -120,7 +118,7 @@ describe("System Services selection, pricing and trial presentation", () => {
     ).toContain("ends soon");
     expect(
       render({ ...subscription, serverNow: subscription.trialEndsAt }),
-    ).toContain("Your trial has ended");
+    ).toContain("Your System Services trial has ended");
     expect(
       render({
         ...subscription,
@@ -129,7 +127,20 @@ describe("System Services selection, pricing and trial presentation", () => {
         verificationSource: "provider",
         currentPeriodEndsAt: "2026-12-17T00:00:00Z",
       }),
-    ).toBe("");
+    ).toContain("System Services trial");
+  });
+  it("hides an expired-trial reminder only when selected services have verified company entitlements", () => {
+    const html = renderToStaticMarkup(
+      <TrialBanner
+        subscription={{ ...subscription, serverNow: subscription.trialEndsAt }}
+        modules={modules.map((m) => ({
+          ...m,
+          entitlementSource: "verified",
+          expiresAt: "2026-12-31T00:00:00Z",
+        }))}
+      />,
+    );
+    expect(html).toBe("");
   });
   it("shows future salon services as unavailable and explains trial restrictions", () => {
     const html = renderToStaticMarkup(
@@ -143,7 +154,7 @@ describe("System Services selection, pricing and trial presentation", () => {
     expect(html).toContain("Coming soon");
     expect(html).toContain('aria-label="Appointment Booking" disabled=""');
     expect(html).toContain("RM39.00");
-    expect(html).toContain("Current trial/subscription editing rules apply");
+    expect(html).toContain("Permanent Free Core");
     expect(html).not.toContain('href="/dashboard/appointments"');
   });
   it("shows enabled accessible services and restricts the plus action to module managers", () => {

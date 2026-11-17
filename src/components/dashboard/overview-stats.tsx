@@ -50,19 +50,19 @@ export function OverviewStats({
         </div>
         <div>
           <span>
-            <Wallet size={18} /> Completed order totals
+            <Wallet size={18} /> Recorded cash this month
           </span>
           <strong>
             {metrics
-              ? formatMoney(metrics.revenue)
+              ? formatMoney(metrics.recordedCash)
               : result
                 ? "Unavailable"
                 : "Loading…"}
           </strong>
           <small>
             {metrics
-              ? `${metrics.completedOrders} completed orders · MYT`
-              : "Gross order totals, including unpaid orders"}
+              ? `Gross completed: ${formatMoney(metrics.revenue)} (includes unpaid); ${metrics.completedOrders} orders`
+              : "Completed cash tickets only; manually recorded"}
           </small>
         </div>
         <div>

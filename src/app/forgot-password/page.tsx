@@ -1,6 +1,6 @@
 import { AuthPage } from "@/components/auth/auth-page";
 export const metadata = {
-  title: "Reset password | SERVQO",
+  title: "Reset password | SERVQOO",
   robots: { index: false, follow: false },
 };
 export default async function Page({

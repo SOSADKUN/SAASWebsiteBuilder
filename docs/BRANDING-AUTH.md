@@ -1,4 +1,7 @@
-# SERVQO branding and authentication UI
+# SERVQOO branding and authentication UI
+
+Current architecture and access policy: [Project Guide](SERVQOO_PROJECT_GUIDE.md).
+Auth/recovery needs no privileged Storage key; the full application's media operations separately require `SUPABASE_STORAGE_SERVICE_KEY`.
 
 Main changed/new files:
 

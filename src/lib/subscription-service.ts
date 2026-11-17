@@ -43,7 +43,7 @@ export async function subscriptionSnapshot(
     trialStartedAt: row.trialStartedAt.toISOString(),
     trialEndsAt: row.trialEndsAt.toISOString(),
     status: row.subscription.status,
-    planName: row.planName ?? "SERVQO",
+    planName: row.planName?.replace(/SERVQO(?!O)/g, "SERVQOO") ?? "SERVQOO",
     currentPeriodEndsAt:
       row.subscription.currentPeriodEndsAt?.toISOString() ?? null,
     paymentVerifiedAt:

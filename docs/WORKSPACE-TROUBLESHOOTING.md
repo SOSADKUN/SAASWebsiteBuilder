@@ -1,84 +1,29 @@
-# Investigate slow workspace creation
+# SERVQOO workspace diagnostics
 
-The spinner cannot distinguish Auth latency, a database connection wait, a locked statement or a slow dashboard render. Use the stage logs instead of repeatedly submitting or deleting users.
+Current policy/architecture: [Project Guide](SERVQOO_PROJECT_GUIDE.md). Earlier investigations are preserved in the [archive](archive/README.md), including [the timeout incident](archive/DASHBOARD-TIMEOUT.md) and [previous onboarding notes](archive/WORKSPACE_TROUBLESHOOTING_PRE_CONSOLIDATION.md). Historical timings do not prove current production conditions.
 
-## Current read-only observations
+## Locate the failing request
 
-The configured database now has 18 tables, 3 migrations, 33 component versions, the media bucket and `"issues": []`. The missing migration is no longer the explanation against this database. Vercel's saved environment values were not inspected; confirm Production targets this same project.
+Use the support reference shown in the workspace error. In Vercel Runtime Logs, confirm the correct project/production deployment, clear filters, choose the failure's time range and search that reference. Reproduce once if necessary. Compare stage `started`, `completed`, `failed` and allowlisted error codes/timings, not just repeated loading messages. Never paste cookies, tokens, customer records, SQL text or connection strings into support logs.
 
-Diagnostics from this development machine measured about 2,451 ms for a fresh runtime database connection, 305 ms for one SQL round trip, and 1,038 ms for the public Auth settings endpoint. No sessions were waiting on database locks during that snapshot. These are **not Vercel function timings**. The public Auth settings check does not validate a user's session.
+`dashboard.load` validates authentication/membership, then real module/company/subscription context and view-specific reads. A user without membership should reach setup. A failed module query is not evidence of absent merchant onboarding and must not be bypassed. Error UI replaces unresolved loading; retry does not prove the underlying cause is fixed.
 
-```powershell
-npm.cmd run db:check
-npm.cmd run workspace:diagnose
-```
+| Code                         | Investigation                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `42P01`, `42703`             | Undefined relation/column: inspect actual deployment runtime target and migration state; no authorization fallback |
+| `57014`                      | Statement cancellation, including server timeout; correlate database/provider logs                                 |
+| `QUERY_TIMEOUT`              | Driver-bounded query/queue failure; inspect pool usage, locks, connectivity and workload                           |
+| `55P03`                      | Lock timeout; inspect the blocking chain while the request is stalled                                              |
+| `23505`                      | Unique constraint, such as an already-used website slug; preserve records                                          |
+| `42501`                      | Permission mismatch; review intended roles/policies instead of granting blanket access                             |
+| Connection/DNS timeout codes | Check actual endpoint, paused-project/network/TLS state and region placement                                       |
 
-The diagnostics inspect runtime and optional migration connections separately. They print only timings, schema readiness, lock-wait counts and HTTP status. No writes, emails, credentials, hostnames, merchant data or SQL text are involved.
+## Controlled read-only tools
 
-## Investigate on Vercel
+`env:check`, `db:check`, `workspace:diagnose` and `dashboard:diagnose` contact the configured project. Review the target before running them; they were not run externally during cleanup. Never assume the ignored local URI is production. `dashboard:diagnose -- --compare-pipelining` deliberately compares the older workload; it is not a production repair.
 
-1. Deploy the updated code. New instrumentation cannot appear in an older deployment's logs.
-2. Open the Vercel project's **Logs**, select Production and the relevant request time/path (`/dashboard`). Search for `workspace.create`.
-3. Submit once. The button disables while pending and acknowledges delays after ten seconds. Do not submit again from another tab.
-4. Compare `started` and `completed` events sharing the same server-generated `reference`. `durationMs` measures that stage; `totalMs` measures the request so far. Failures include only an allowlisted `errorCode`.
-5. An inline error's Support reference matches these logs. Share the reference, stage, outcome, duration and code, not full requests/cookies or confirmation URLs.
+`db:check` currently assumes every table has a browser SELECT policy. Private Storage reservations/entitlements intentionally have none. Treat those potential false positives as a diagnostic-review issue, not a reason to expose private tables. Its current checks also do not fully validate new quota/trial helpers.
 
-| Last stage                                                                              | Investigate                                                                                        |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| No `workspace.create` entry                                                             | Correct deployment, browser Network request, or Proxy/network delays before the action starts.     |
-| `authentication`                                                                        | Supabase session validation, connectivity or retries.                                              |
-| `database_transaction`, before `transaction_limits` starts                              | Connection/pool acquisition or transaction BEGIN.                                                  |
-| `transaction_limits`                                                                    | Transaction-local timeout setup.                                                                   |
-| `profile`, `merchant`, `trial_claim`, `membership`, `website`, `homepage`, `categories` | That SQL operation or its trigger. The merchant insert initializes trial/subscription records too. |
-| `categories` completed but transaction not completed                                    | Commit or its network response; do not assume rollback if the connection failed around commit.     |
-| `ready_to_redirect`                                                                     | Creation committed. Look for `dashboard.load` next.                                                |
-| `dashboard.load` completed                                                              | Browser network/navigation or client rendering.                                                    |
+Runtime `database-config.ts` retains verified TLS, prepared statements disabled, maximum three connections and `max_pipeline: 1` for Supabase transaction-pooler port 6543. Historical reproduction motivated that setting; it does not establish today's deployed pooler version or fix every timeout. Migration tooling uses direct/session mode, not port 6543. Per-view loaders reduce unrelated reads; Overview still needs some builder data.
 
-In browser Developer Tools → Network, enable Preserve log, submit once, and inspect the action request's Timing. A separate wait after redirect can be dashboard loading. Next.js may stream navigation inside HTTP 200, so HTTP status alone does not prove success. Do not share request bodies, cookies, tokens or full confirmation URLs.
-
-## Error codes
-
-### Membership statement timeout (`57014`)
-
-A reported production failure reached PostgreSQL while selecting `merchant_users` by `user_id`. A subsequent read-only check using the local runtime credentials found the membership, valid `membership_user` and `membership_unique` indexes, an index scan taking 0.107 ms inside PostgreSQL, and no blocking or idle-in-transaction sessions at that moment. The runtime role bypasses RLS. This does not reproduce or explain the earlier production timeout, and does not establish that Vercel uses the same connection configuration.
-
-The configured pooler region is `ap-southeast-2` (Sydney). The reported Vercel request ran in `iad1` (Washington, D.C.). Region distance adds latency; it is not proof of the statement-timeout cause.
-
-While a request is still stuck, run this **read-only** query in Supabase SQL Editor, or inspect Database Connections. It deliberately excludes SQL text, user identities and connection strings:
-
-```sql
-SELECT pid, state, wait_event_type, wait_event,
-       pg_blocking_pids(pid) AS blocking_pids,
-       extract(epoch FROM (now() - xact_start))::integer AS transaction_seconds
-FROM pg_stat_activity
-WHERE datname = current_database()
-  AND pid <> pg_backend_pid()
-  AND (wait_event_type = 'Lock' OR state LIKE 'idle in transaction%');
-```
-
-Nonempty `blocking_pids` identifies a blocking chain to investigate. An empty result after the request ends cannot rule out an earlier lock. Check PostgreSQL logs at the precise failure time and database resource metrics too. Do not terminate sessions, change global timeouts, reset users or rerun migrations merely because this query timed out.
-
-| Code                                                        | Meaning                                                                                                                    |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `42P01`, `42703`                                            | Missing table/column in the deployment's actual database. Check Production project and migration state.                    |
-| `23505`                                                     | Website address already used.                                                                                              |
-| `TRIAL_CLAIMED`                                             | This account already created its trial business; open the existing workspace.                                              |
-| `55P03`                                                     | Lock wait timed out. Inspect Supabase Database Connections while stuck.                                                    |
-| `57014`                                                     | Statement canceled, including statement-timeout cases. Check stage and database logs.                                      |
-| `CONNECT_TIMEOUT`, `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT` | Connection/network problem.                                                                                                |
-| `42501`                                                     | Database permissions need attention.                                                                                       |
-| `UNKNOWN`                                                   | Arbitrary provider details are deliberately excluded; correlate the reference with restricted administrator/platform logs. |
-
-## Changes that reduce delay
-
-The five default categories now use one insert instead of five, removing four round trips. Dashboard capability checks reuse the already validated user/membership instead of repeating Auth and the same membership query. Server-side tenant and role checks remain enforced.
-
-Workspace SQL uses transaction-local statement (15 seconds), lock (5 seconds) and idle-in-transaction (20 seconds) timeouts. They reset with the transaction; they do not change global database settings or bound Auth, pool acquisition or dashboard rendering. There is no client timeout that pretends a possibly committed write was canceled, and no automatic write retry.
-
-Compare Vercel's function region with the Supabase database region. Keep functions near the data source where appropriate; changing regions is a separate deployment decision. Inspect connection usage before changing pool sizes.
-
-References: [Vercel Runtime Logs](https://vercel.com/docs/logs/runtime), [function regions](https://vercel.com/docs/functions/configuring-functions/region), [Supabase connection management](https://supabase.com/docs/guides/database/connection-management).
-
-## Layout
-
-The initial form fits standard desktop and phone viewports without scrolling. Short-screen spacing adapts. Keyboard, browser zoom and long errors can scroll naturally so nothing is clipped. Values remain preserved after server errors.
+The reported production modules-stage `42P01` is a separate unresolved schema/deployment mismatch. Follow the [reviewed dependency workflow](SERVQOO_PROJECT_GUIDE.md#18-database-migration-workflow); the current migrate command applies all pending changes, not just 0005/0006. Do not reset data, clear the journal, delete users, remove tenant checks, increase global timeouts blindly or retry writes with a new request ID when commit status is uncertain.

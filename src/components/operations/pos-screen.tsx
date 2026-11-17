@@ -246,6 +246,13 @@ export function PosScreen({
   );
   return (
     <OperationsFrame title="POS / Cashier" className="pos-screen" sync={sync}>
+      {!enabled && (
+        <p className="ops-error" role="status">
+          New orders require an active System Services trial or verified service
+          entitlement. Existing tickets remain available; pending tickets can
+          still be cancelled. Free Core stays available.
+        </p>
+      )}
       {error && (
         <p className="ops-error" role="alert">
           {error}

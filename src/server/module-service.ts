@@ -5,6 +5,7 @@ import * as s from "@/db/schema";
 import {
   businessModules,
   moduleAccess,
+  moduleReadable,
   type ModuleState,
 } from "@/lib/business-modules";
 
@@ -16,16 +17,27 @@ export async function merchantModuleState(
   const rows = await database
     .select({
       key: s.merchantModules.moduleKey,
+      policy: s.moduleDefinitions.accessPolicy,
+      trialEligible: s.moduleDefinitions.trialEligible,
+      trialEnd: s.moduleTrials.endsAt,
+      trialActive: sql<boolean>`${s.moduleTrials.startsAt} <= CURRENT_TIMESTAMP AND ${s.moduleTrials.endsAt} > CURRENT_TIMESTAMP AND ${s.moduleTrials.startsAt} = ${s.merchants.trialStartedAt} AND ${s.moduleTrials.endsAt} = ${s.merchants.trialEndsAt}`,
+      verified: sql<boolean>`${s.moduleEntitlements.source} IN ('provider','admin') AND ${s.moduleEntitlements.verifiedAt} <= CURRENT_TIMESTAMP AND ${s.moduleEntitlements.expiresAt} > CURRENT_TIMESTAMP`,
       enabled: s.merchantModules.enabled,
-      licenseId: s.moduleEntitlements.id,
       expiresAt: s.moduleEntitlements.expiresAt,
       available: s.moduleDefinitions.available,
-      expired: sql<boolean>`${s.moduleEntitlements.expiresAt} IS NOT NULL AND ${s.moduleEntitlements.expiresAt} <= CURRENT_TIMESTAMP`,
     })
     .from(s.merchantModules)
     .innerJoin(
       s.moduleDefinitions,
       eq(s.moduleDefinitions.key, s.merchantModules.moduleKey),
+    )
+    .innerJoin(s.merchants, eq(s.merchants.id, s.merchantModules.merchantId))
+    .leftJoin(
+      s.moduleTrials,
+      and(
+        eq(s.moduleTrials.merchantId, s.merchantModules.merchantId),
+        eq(s.moduleTrials.moduleKey, s.merchantModules.moduleKey),
+      ),
     )
     .leftJoin(
       s.moduleEntitlements,
@@ -35,22 +47,53 @@ export async function merchantModuleState(
       ),
     )
     .where(eq(s.merchantModules.merchantId, merchantId));
-  return rows.map((row) => ({
-    key: row.key,
-    available: row.available,
-    enabled: row.enabled && row.available,
-    entitled: !!row.licenseId,
-    expiresAt: row.expired
-      ? "1970-01-01T00:00:00.000Z"
-      : (row.expiresAt?.toISOString() ?? null),
-  }));
+  return rows.map((row) => {
+    const definition = businessModules.find((m) => m.key === row.key);
+    const free = definition?.accessPolicy === "free" && row.policy === "free";
+    const paid = definition?.accessPolicy === "paid" && row.policy === "paid";
+    const trial =
+      paid &&
+      definition.trialEligible &&
+      row.trialEligible &&
+      !!row.trialActive;
+    const verified = paid && !!row.verified;
+    const useVerified =
+      verified &&
+      (!trial || row.expiresAt!.getTime() >= row.trialEnd!.getTime());
+    return {
+      key: row.key,
+      available: row.available,
+      enabled: row.enabled && row.available,
+      entitled: free || trial || verified,
+      expiresAt: free
+        ? null
+        : useVerified
+          ? row.expiresAt!.toISOString()
+          : (row.trialEnd?.toISOString() ?? null),
+      entitlementSource: free
+        ? "free"
+        : useVerified
+          ? "verified"
+          : trial
+            ? "trial"
+            : "none",
+    } satisfies ModuleState;
+  });
 }
-export async function requireModule(merchantId: string, key: string) {
+
+export async function requireModule(
+  merchantId: string,
+  key: string,
+  intent: "read" | "write" = "read",
+) {
+  const states = await merchantModuleState(merchantId);
   if (
     !businessModules.some(
       (m) => m.key === key && m.availability === "implemented",
     ) ||
-    moduleAccess(key, await merchantModuleState(merchantId)) !== "enabled"
+    (intent === "write"
+      ? moduleAccess(key, states) !== "enabled"
+      : !moduleReadable(key, states))
   )
     throw new Error("Business module is disabled or not entitled");
 }

@@ -27,18 +27,12 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 describe("product save latency and authorization gates", () => {
-  it("overlaps independent reads after authorization and waits for both before inserting", async () => {
+  it("waits for membership and category validation without querying a paid subscription", async () => {
     let authorize!: (value: unknown) => void;
-    let subscription!: () => void;
     let category!: (value: unknown) => void;
     mocks.authorize.mockReturnValue(
       new Promise((resolve) => {
         authorize = resolve;
-      }),
-    );
-    mocks.subscription.mockReturnValue(
-      new Promise<void>((resolve) => {
-        subscription = resolve;
       }),
     );
     mocks.category.mockReturnValue(
@@ -66,14 +60,12 @@ describe("product save latency and authorization gates", () => {
     expect(mocks.subscription).not.toHaveBeenCalled();
     authorize({ id: "owner" });
     await vi.waitFor(() => {
-      expect(mocks.subscription).toHaveBeenCalled();
+      expect(mocks.subscription).not.toHaveBeenCalled();
       expect(mocks.category).toHaveBeenCalled();
     });
     expect(mocks.values).not.toHaveBeenCalled();
     category({ id: categoryId });
-    await Promise.resolve();
-    expect(mocks.values).not.toHaveBeenCalled();
-    subscription();
+
     expect(await saving).toEqual({ ok: true });
     expect(mocks.values).toHaveBeenCalledOnce();
   });

@@ -1,4 +1,5 @@
 import "./load-env";
+import { storagePolicySql } from "../src/lib/storage-policy";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -15,7 +16,14 @@ async function main() {
   try {
     await migrate(drizzle(client), { migrationsFolder: "drizzle" });
     const policies = await readFile("supabase/policies.sql", "utf8");
-    await client.begin((sql) => sql.unsafe(policies));
+    const storagePolicies = await readFile(
+      "supabase/storage-quota.sql",
+      "utf8",
+    );
+    await client.begin(async (sql) => {
+      await sql.unsafe(policies);
+      await sql.unsafe(storagePolicySql(storagePolicies));
+    });
     await registerCatalog(drizzle(client));
     console.log("Schema and policies applied.");
   } finally {

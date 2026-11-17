@@ -26,7 +26,11 @@ import {
 import type { MerchantCapability } from "@/lib/merchant-capabilities";
 import { signOut } from "@/server/actions";
 import { Brand } from "@/components/brand";
-import type { BusinessType, ModuleState } from "@/lib/business-modules";
+import {
+  moduleAccess,
+  type BusinessType,
+  type ModuleState,
+} from "@/lib/business-modules";
 type Outlet = { id: string; name: string };
 type Props = {
   businessName: string;
@@ -140,6 +144,11 @@ export function MerchantSidebar({
         aria-disabled="true"
       >
         <span>{item.label}</span>
+        {item.moduleKey &&
+          ["pos", "fnb_orders", "kitchen_queue"].includes(item.moduleKey) &&
+          moduleAccess(item.moduleKey, modules ?? []) !== "enabled" && (
+            <small>History</small>
+          )}
         <small>Coming soon</small>
       </div>
     ) : (
@@ -160,6 +169,11 @@ export function MerchantSidebar({
             <LayoutDashboard size={17} />
           ))}
         <span>{item.label}</span>
+        {item.moduleKey &&
+          ["pos", "fnb_orders", "kitchen_queue"].includes(item.moduleKey) &&
+          moduleAccess(item.moduleKey, modules ?? []) !== "enabled" && (
+            <small>History</small>
+          )}
         {item.id === "designs" && (
           <small className="design-nav-badge">DESIGN</small>
         )}
@@ -298,7 +312,7 @@ export function MerchantSidebar({
             </form>
           </div>
           <span className="platform-credit">
-            Powered by <b>SERVQO</b> <span>BUSINESS WORKSPACE</span>
+            Powered by <b>SERVQOO</b> <span>BUSINESS WORKSPACE</span>
           </span>
         </footer>
       </aside>

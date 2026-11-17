@@ -9,8 +9,12 @@ import {
   X,
 } from "lucide-react";
 import type { Product } from "@/lib/models";
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
-import { saveMenuProduct, uploadMenuProductImage } from "@/server/actions";
+import {
+  uploadOptimizedImage,
+  type ImageProgress as ImageState,
+} from "@/lib/image-upload";
+import { ImageProgress } from "@/components/image-progress";
+import { saveMenuProduct } from "@/server/actions";
 
 type Feedback = { error: string; reference?: string };
 export function ProductEditor({
@@ -35,6 +39,7 @@ export function ProductEditor({
   const [imageError, setImageError] = useState<Feedback | null>(null);
   const [preview, setPreview] = useState("");
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageProgress, setImageProgress] = useState<ImageState | null>(null);
   const [uploadPending, setUploadPending] = useState(false);
   const [savedImage, setSavedImage] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -60,36 +65,24 @@ export function ProductEditor({
   async function uploadImage(file: File) {
     if (uploading.current || pending) return;
     setImageError(null);
-    if (
-      !file.size ||
-      file.size > MAX_UPLOAD_BYTES ||
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type)
-    ) {
-      setImageError({
-        error: `Choose a JPG, PNG or WebP image up to ${MAX_UPLOAD_LABEL}.`,
-      });
-      return;
-    }
     uploading.current = true;
     setUploadPending(true);
     setSavedImage(false);
     setImageFailed(false);
     setPreview(URL.createObjectURL(file));
-    const form = new FormData();
-    form.set("file", file);
     try {
-      const result = await uploadMenuProductImage(merchantId, form);
-      if (!result.ok) {
-        setImageError(result);
-        setPreview("");
-        return;
-      }
-      setDraft((current) => ({ ...current, image: result.url }));
+      const url = await uploadOptimizedImage(
+        file,
+        merchantId,
+        "product",
+        setImageProgress,
+      );
+      setDraft((current) => ({ ...current, image: url }));
       setSavedImage(true);
-    } catch {
+    } catch (error) {
+      setImageProgress(null);
       setImageError({
-        error:
-          "The image could not be uploaded. Check your connection and try again.",
+        error: error instanceof Error ? error.message : "Image upload failed.",
       });
       setPreview("");
     } finally {
@@ -282,6 +275,7 @@ export function ProductEditor({
                 </span>
               )}
             </div>
+            <ImageProgress state={imageProgress} />
             <div className="product-photo__actions">
               <input
                 ref={fileInput}
@@ -333,7 +327,7 @@ export function ProductEditor({
                   <Check size={13} /> Image uploaded
                 </>
               ) : (
-                `JPG, PNG or WebP · Up to ${MAX_UPLOAD_LABEL}`
+                "JPG, PNG or WebP - up to 20 MiB before optimization"
               )}
             </small>
             <label className="product-photo__url">

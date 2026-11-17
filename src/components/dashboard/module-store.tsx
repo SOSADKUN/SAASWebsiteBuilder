@@ -141,7 +141,7 @@ export function ModuleStore({
           Business type
           <select
             value={type}
-            disabled={!canConfigure || pending}
+            disabled={!canConfigure || !canWrite || pending}
             onChange={(event) => {
               const value = event.target.value;
               startTransition(async () => {
@@ -169,17 +169,11 @@ export function ModuleStore({
         </label>
       </div>
       <p className="notice">
-        Dashboard, business profile and settings remain available.
-        Website/catalog tools are shown as included in this price preview;
-        current trial/subscription editing restrictions remain. A permanent Free
-        Plan and real billing are not available yet.
+        Free Core includes your Dashboard, business profile, catalog, media and
+        one multi-page website. Paid services require their own active trial or
+        verified entitlement. You can always manage services and export your
+        data.
       </p>
-      {!canWrite && (
-        <p className="notice">
-          Service changes require an active trial or verified subscription.
-          Existing data remains saved.
-        </p>
-      )}
       {message && (
         <p className="notice" role="status">
           {message}
@@ -194,7 +188,7 @@ export function ModuleStore({
         type={type}
         selected={selected}
         modules={modules}
-        disabled={!canConfigure || !canWrite || pending}
+        disabled={!canConfigure || pending}
         management
         onToggle={toggle}
       />

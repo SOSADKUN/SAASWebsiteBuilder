@@ -16,7 +16,7 @@ export function ServqoLoading({
         <img src="/brand/servqo-icon.webp" width="96" height="96" alt="" />
         <span />
       </span>
-      <span className="servqo-loading-wordmark">SERVQO</span>
+      <span className="servqo-loading-wordmark">SERVQOO</span>
       <p>{label}</p>
     </div>
   );

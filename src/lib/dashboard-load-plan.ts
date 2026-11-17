@@ -1,5 +1,5 @@
 import type { MerchantCapability } from "./merchant-capabilities";
-import { moduleAccess, type ModuleState } from "./business-modules";
+import { moduleReadable, type ModuleState } from "./business-modules";
 type Dataset =
   | "pages"
   | "products"
@@ -15,7 +15,7 @@ export function dashboardLoadPlan(
   states: readonly ModuleState[],
 ): Dataset[] {
   const can = (cap: MerchantCapability, module: string) =>
-    capabilities.includes(cap) && moduleAccess(module, states) === "enabled";
+    capabilities.includes(cap) && moduleReadable(module, states);
   const website = can("website:view", "website");
   const catalog = can("menu:view", "catalog");
   if (["Website Editor", "Preview / Publish"].includes(view))

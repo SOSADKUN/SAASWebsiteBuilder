@@ -226,9 +226,9 @@ describe("durable POS orders", () => {
       ),
     ).toBe(false);
   });
-  it("retains subscription enforcement for new orders", async () => {
+  it("denies new operations after the System Services trial expires", async () => {
     await expect(createPosOrder(expired, input())).rejects.toThrow(
-      "Subscription required",
+      "Business module",
     );
     expect(
       (

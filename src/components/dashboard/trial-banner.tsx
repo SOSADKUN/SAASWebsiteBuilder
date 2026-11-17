@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Clock3 } from "lucide-react";
 import {
-  subscriptionAccess,
+  systemTrialAccess,
   type SubscriptionSnapshot,
 } from "@/lib/subscription-policy";
 import {
@@ -32,17 +32,30 @@ export function TrialBanner({
     );
     return () => window.clearInterval(timer);
   }, []);
-  const access = subscriptionAccess({
+  const access = systemTrialAccess({
     ...subscription,
     serverNow: new Date(
       Date.parse(subscription.serverNow) + elapsed,
     ).toISOString(),
   });
-  if (access.status === "active") return null;
   const keys = selectedServices(modules);
-  const names = systemServices
-    .filter((s) => keys.includes(s.key) && (s.monthlyPrice ?? 0) > 0)
-    .map((s) => s.name);
+  const paid = systemServices.filter(
+    (s) => keys.includes(s.key) && (s.monthlyPrice ?? 0) > 0,
+  );
+  const needsEntitlement = paid.filter(
+    (s) =>
+      !s.modules.every((key) => {
+        const state = modules.find((m) => m.key === key);
+        return (
+          state?.entitlementSource === "verified" &&
+          state.expiresAt !== null &&
+          Date.parse(state.expiresAt) >
+            Date.parse(subscription.serverNow) + elapsed
+        );
+      }),
+  );
+  if (paid.length && !needsEntitlement.length) return null;
+  const names = paid.map((s) => s.name);
   return (
     <section
       className={`trial-status-banner ${!access.allowed || access.remainingDays <= 3 ? "trial-reminder" : ""}`}
@@ -55,12 +68,18 @@ export function TrialBanner({
             ? access.remainingDays <= 3
               ? `Your trial ends soon - ${access.remainingDays} days left`
               : `Your System Services trial - ${access.remainingDays} days left`
-            : "Your trial has ended"}
+            : "Your System Services trial has ended"}
         </strong>
         <p>
           {access.allowed
             ? "RM0 due during your trial. "
-            : "A valid subscription is required to resume changes. Your records are preserved. "}
+            : "Free Core stays available. New paid-service operations need a verified service entitlement; existing tickets can be finished. "}
+          {!access.allowed && (
+            <>
+              Services requiring entitlement:{" "}
+              {needsEntitlement.map((s) => s.name).join(", ") || "None"}.{" "}
+            </>
+          )}
           Trial expiry:{" "}
           {new Date(subscription.trialEndsAt).toLocaleDateString("en-MY", {
             timeZone: "Asia/Kuala_Lumpur",

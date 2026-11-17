@@ -1,61 +1,39 @@
-# Merchant trials and subscription foundation
+# Free Core and System Services access
 
-## Migration review and rollout
+Current reference: [Project Guide](SERVQOO_PROJECT_GUIDE.md). This focused document describes the Phase B policy. Earlier audit/phase reports describe their historical implementations; the current contract is below. See [archived Phase B report](archive/SERVQOO_PHASE_B_REPORT.md) for rollout and rollback dependencies.
 
-**The migration is prepared locally, not applied to Supabase.** Review `drizzle/0002_third_gargoyle.sql` before changing the live database. The two existing migrations are unchanged. No payment service, account purchase, deployment, or live subscription activation is part of this change.
+## Permanent Free Core
 
-Changes:
+Authenticated, authorized company owners retain Dashboard, basic business/profile/settings, product/category catalog, media within Company Storage Quota, basic website draft editing/publishing, service discovery, billing information and JSON export after trial expiry. Existing role restrictions still apply; free access does not grant staff new capabilities. No account-management, employee or custom-domain module is introduced.
 
-- Add non-null `merchants.trial_started_at` and `trial_ends_at` as PostgreSQL `timestamptz`. New merchant creation uses database time and exactly 336 hours (14 × 24 hours). An update trigger prevents these dates from being reset by business edits or future staff workflows.
-- Backfill existing merchants from their **stored `created_at`**, with end time 336 hours later. This preserves historical creation and avoids granting fresh trials during rollout. **Existing businesses older than 14 days become restricted immediately** unless they have verified paid access. Review that effect before applying.
-- Add `subscription_plans`, seeded with a single SERVQO Standard plan. No invented price or actual payment method is attached.
-- Add one `merchant_subscriptions` row per merchant, referencing a plan, with constrained statuses `trialing`, `active`, `past_due`, `canceled`, `expired`. Paid access requires `active`, a server-verified source (`provider` or trusted `admin`), a verification timestamp not in the future, and a paid period ending after database time. Merely selecting a plan or unlocking a demo component never creates paid access.
-- Add append-only `subscription_events`. Bootstrap/backfill and meaningful subscription changes are logged by database triggers. Changes to a subscription's status, plan, payment verification or period produce an audit event.
-- Add append-only `merchant_trial_claims`, keyed by the authenticated subject UUID, with the original merchant ID. Backfill each existing owner's earliest merchant claim. Claims deliberately have no Auth-user foreign key and are not erased by deleting an Auth user. Their merchant reference also prevents accidental deletion of a claimed business without a deliberate retention-policy change.
-- Add tenant-scoped read RLS and revoke browser-role writes on all four tables. Browser clients cannot grant paid status, change plans or extend trials. Trial dates are immutable even through normal privileged merchant update queries.
-- Add a membership-scoped SQL subscription helper and update the media INSERT policy so direct Supabase Storage uploads cannot bypass expiry checks. Storage reads stay available after expiry.
+One free website means one `websites` property per `merchant_id`, enforced by its existing unique constraint. Multiple pages remain supported. Existing `/sites/[slug]/...` URLs, published content and design ownership remain unchanged. Premium designs still need separate component entitlements. New demo design unlocks retain their existing explicit subscription gate; Free Core does not grant premium ownership. No new page-count cap is imposed. Existing input/layout limits and 20 MiB free storage are enforced; broader fair-use/rate limits and premium custom-domain features remain future policy/work.
 
-No existing merchant, website, menu, media, entitlement or Auth record is deleted. No migration reset or baseline change is required. New merchant subscription initialization is transactional with merchant insertion. The account claim is also inserted in the business-creation transaction, so a conflicting/repeated claim rolls back the new business and its initial subscription/event.
+## One-time service trial
 
-Before rollout, take the normal database backup/snapshot for your environment, review which merchants will already be expired, and arrange a controlled migration window. Do not run application code requiring these tables before migration completion.
+`merchant_module_trials` records explicit company/module authorization for POS, F&B Orders and Kitchen Queue. Each row exactly matches immutable merchant trial start/end dates. Merchant creation initializes these records transactionally; migration 0008 backfills the original dates, including already expired companies. Module selection never restarts the clock. The existing 14-day timestamps and durable one-trial claim per Auth subject remain.
 
-After review/approval, run from the repository root with the existing ignored local environment file. `MIGRATION_DATABASE_URL` must target the same database as runtime and use a direct/session connection, not transaction port 6543:
+The existing onboarding wizard recommends by business type; View all allows compatible implemented services such as product-only POS for salons. Appointments and other Coming Soon services stay unavailable. Selecting no optional services is valid: all six Core modules stay included. Existing completed merchants do not repeat onboarding. Owner-only service configuration persists without deleting content. Dependencies and operational-data confirmation still apply.
 
-```powershell
-npm.cmd run db:migrate
-npm.cmd run db:check
-```
+Paid service access requires BOTH configuration/availability/dependencies and either a current explicit trial or a company-specific verified service entitlement. Old `included`/`legacy` rows are preserved for provenance but do not constitute permanent paid authorization. A verified row requires `source=provider|admin`, non-future `verified_at`, and future `expires_at`. A base subscription alone does not license services. No gateway, paid issuance endpoint, renewal job, automatic billing or paid activation is implemented.
 
-`db:migrate` applies the pending schema migration, reapplies Supabase access/storage policies, and registers missing catalog entries. It does not reset tables. The expected result afterward is 18 application tables, 3 applied migrations, the existing component versions and `"issues": []`. The checker now also verifies the subscription helper and lifecycle triggers. Do not deploy until that check succeeds. No migration was run against the live database during implementation.
+## Expiry and unfinished tickets
 
-Do not roll back by deleting tables or migration records. If a deployment needs reverting, preserve the additive schema/data, assess the storage policy dependency, and use a reviewed forward fix. The new checks deliberately fail closed if a subscription row is missing.
+Enabled operational services remain visible with a History badge after expiry. Their data is tenant/role protected. New POS tickets are denied by the server; UI shows why. Exact retry of an already committed request UUID/fingerprint returns the existing ticket after expiry, allowing uncertain submissions to reconcile. Reusing that UUID with changed contents remains rejected.
 
-## Access policy
+Existing tickets can progress pending -> preparing -> ready -> completed after expiry, or pending -> cancelled with a reason. Cancellation acknowledgement remains available. Tenant authorization, role capabilities, legal transitions, expected versions and audit events remain required. No new items/payments/order totals are added through these paths. Active tickets and unacknowledged cancellations must be resolved before disabling operational services. Disabled services retain database data/export but hide their screens until authorized reactivation.
 
-The subscription is attached to the merchant. Team membership, email changes, signing in and editing business details do not change the trial. Staff invitations are still a future module; adding a membership directly does not reset dates or create another subscription.
+Monthly recorded cash counts completed cash tickets only. Gross completed totals are separately labelled and include unpaid tickets. Cash is manually recorded, not provider-reconciled accounting revenue; no settlement/refund ledger is claimed.
 
-Server actions first authorize the tenant and capability, then load fresh subscription eligibility using PostgreSQL time. Website save/publish, page creation, menu/category mutations, media upload and demo component unlock require a valid trial or verified active subscription. Browser visibility is not the security boundary. Current role permissions still apply independently of billing.
+## Database and Storage boundaries
 
-After expiry, members can still log in and read the dashboard, saved pages, products, media and business information. Authorized members can update business details, open Subscription & Billing and export saved data at `/dashboard/export?merchantId=UUID`. Public sites remain published. The JSON export is tenant-authorized, read-only, non-cached, and includes business data, layouts, revisions, menu, media URLs, component entitlements and subscription history. Original binary images must be downloaded separately. Unsaved editor state is not exported.
+Server module state uses PostgreSQL time and actual company trial/license rows, never a client trial flag. Missing module tables/columns fail normally; there is no 42P01 fallback. SQL separates retained reads (`has_business_module`) from starting operations (`can_use_business_module`); capability checks remain separate. Authenticated browser application writes remain revoked. Trial rows are immutable and only tenant-readable; authenticated clients cannot issue licenses or extend dates.
 
-The billing page shows status, remaining days, UTC start/end timestamps and paid-period end if present. Remaining days are rounded up from database time. The page states when it was checked; refresh for a new snapshot. Action authorization always rechecks server time, even if an old browser view still shows time remaining. Effective expiry is computed at request time and does not depend on a scheduled job updating stored `trialing` rows. A stored `active` row with an elapsed paid period is also effectively expired. Past-due/canceled subscriptions have no paid grace period in this version; a still-valid original trial remains usable until its own end.
+Phase A quota/reservation enforcement and public media URLs remain. Free capacity is 20 MiB; original trial window grants 50 MiB; only separate verified Storage entitlement grants 100 MiB. Service licenses do not increase storage. Expiry never deletes images: over-quota companies can remove images but cannot upload until capacity permits. Base permissive Storage policies no longer impose a merchant subscription gate; the Phase A restrictive policies still deny direct browser mutations, and server uploads validate/authorize/reserve capacity.
 
-The Upgrade / Subscribe button only reveals a **payments-not-connected** message. No payment is collected, no subscription is activated, and no client-provided status or dates are trusted. Existing demo component entitlement rules are unchanged.
+## Deployment boundaries
 
-## Abuse prevention and limits
+Review the actual environment and migration journal first. Ordered prerequisites: 0005 multi-industry foundation -> 0006 onboarding -> 0007 company storage quota plus Phase A server-only Storage key and matching policy bundle -> 0008 permanent free Core plus current policy bundle/catalog. Current `db:migrate` applies every pending migration, then base and rendered quota policies together, then catalog. Never use it blindly to repair production 0005/0006 in isolation.
 
-The public business-creation action grants at most one trial business per authenticated subject ID. A unique durable claim handles concurrent attempts and persists if membership is removed or the account's email changes. Employee membership does not claim a new trial for that business. Existing owners with multiple historic businesses keep their data; the earliest claim prevents further self-service trials.
+Test the full bundle on staging before a separately approved production maintenance/code rollout. No external migrations or policies were applied during Phase B. Preserve additive schema, trial rows and provenance on rollback; do not delete data or migration journal entries. Older application/policy versions can restore obsolete subscription gates, so rollback needs coordinated review.
 
-This is basic account-level prevention, not proof that two separately registered Auth identities represent the same person. Deleting and recreating an Auth account creates a different UUID. Preventing that or coordinated multi-account abuse needs additional trusted identity/business verification and risk signals; matching email strings alone is insufficient. Such checks and multi-business paid onboarding are not implemented here. No destructive cleanup is used as a billing mechanism.
-
-## Remaining payment integration
-
-Before accepting money, implement server-controlled plan pricing/currency and a provider adapter; authenticated owner-only checkout/portal actions; webhook signature validation; unique provider customer/subscription/event identifiers; idempotent transactional event handling; verified period/status transitions; cancellation/refund/dunning rules; and reconciliation of missed webhooks. Never activate from a checkout return URL or a client button. Add webhook tests for duplicate, delayed and out-of-order events and tenant ownership.
-
-The current `admin` verification source reserves a trusted operational path, not a merchant-facing action. Any future manual billing override needs explicit platform-admin authorization and actor/reason audit data. Customer billing-management actions must be separated from staff read permissions. Production database access should be granted only to controlled server processes; no privileged Supabase API key is needed in the browser.
-
-## Validation
-
-Tests cover exact expiry, remaining-day rounding, verified paid periods, all restricted server actions, missing-subscription denial, merchant isolation, export after expiry, first/repeated trial claims, historical backfill, automatic initial subscription/event creation, immutable dates/history, browser write denial, and direct storage expiry enforcement. SQL tests apply all migrations and policies to isolated embedded PostgreSQL, not your hosted Supabase database.
-
-Implementation verification passed: 81 tests, TypeScript, ESLint, production build and Drizzle snapshot/schema comparison. The actual billing component was also rendered with synthetic trial/expired data at 1280, 390 and 320 pixels with no horizontal overflow. Hosted end-to-end verification remains pending the reviewed live migration.
+Hosted login, actual devices, live Supabase Storage and production migration acceptance remain separate validation. Disposable PostgreSQL tests are not production evidence. Multi-company switching, employee invitations and payment integration remain future work.

@@ -2,7 +2,7 @@ import type { MerchantCapability } from "./merchant-capabilities";
 import {
   businessModules,
   defaultModuleKeys,
-  moduleAccess,
+  moduleReadable,
   type BusinessType,
   type ModuleState,
 } from "./business-modules";
@@ -220,9 +220,7 @@ export function merchantNavigation(
       );
       return !planned || planned.suggestedTypes.includes(type);
     }
-    return (
-      !item.moduleKey || moduleAccess(item.moduleKey, active) === "enabled"
-    );
+    return !item.moduleKey || moduleReadable(item.moduleKey, active);
   };
   return {
     primary: primaryNavigation.filter(

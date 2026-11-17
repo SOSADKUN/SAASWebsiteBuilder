@@ -4,7 +4,8 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import * as s from "@/db/schema";
 import { authorize } from "@/lib/auth";
-import { requireSubscription } from "@/lib/subscription-service";
+import { merchantModuleState } from "./module-service";
+import { moduleAccess } from "@/lib/business-modules";
 import {
   canChangeOrder,
   createOrderSchema,
@@ -35,12 +36,17 @@ export async function createPosOrder(
       }),
     )
     .digest("hex");
-  await trace.step("subscription", () => requireSubscription(merchantId));
   return trace.step("database_transaction", () =>
     db().transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('statement_timeout','10000',true),set_config('lock_timeout','5000',true)`,
       );
+      // Serialize new operations with owner service configuration changes.
+      await tx
+        .select({ id: s.merchants.id })
+        .from(s.merchants)
+        .where(eq(s.merchants.id, merchantId))
+        .for("share");
       // The no-op upsert also takes the merchant's row lock and returns its
       // current counter, avoiding a separate INSERT followed by SELECT FOR UPDATE.
       const [counter] = await tx
@@ -68,6 +74,11 @@ export async function createPosOrder(
           );
         return { orderId: existing.id, number: existing.number };
       }
+      // An exact acknowledged retry can be reconciled after trial expiry.
+      // Only a genuinely new ticket needs current paid-service authorization.
+      const modules = await merchantModuleState(merchantId, tx);
+      if (moduleAccess("pos", modules) !== "enabled")
+        throw new Error("Business module is disabled or not entitled");
       const products = await tx
         .select()
         .from(s.products)
@@ -171,8 +182,7 @@ export async function changePosOrder(
     z.uuid().parse(merchantId),
     value.status === "cancelled" ? "pos:operate" : "orders:manage",
   );
-  // Cancelling a mistaken ticket remains possible even if billing has expired.
-  if (value.status !== "cancelled") await requireSubscription(merchantId);
+  // Fulfil existing tickets after expiry; no item, total or payment edits are allowed.
   if (value.status === "cancelled" && value.reason.length < 3)
     throw new OrderError(
       "REASON_REQUIRED",

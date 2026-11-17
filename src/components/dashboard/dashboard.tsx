@@ -1,9 +1,15 @@
 ﻿"use client";
+import {
+  uploadOptimizedImage,
+  type ImageProgress as ImageState,
+} from "@/lib/image-upload";
+import { ImageProgress } from "@/components/image-progress";
+import { CompanyStorage } from "./company-storage";
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { MerchantSidebar } from "./sidebar";
 import { TrialBanner } from "./trial-banner";
 import { SubscriptionPanel } from "./subscription-panel";
-import { subscriptionAccess } from "@/lib/subscription-policy";
+
 import { useMerchantWorkspace } from "./workspace-state";
 import {
   navigationForView,
@@ -40,7 +46,7 @@ import { OrdersScreen } from "@/components/operations/orders-screen";
 import { Editor } from "@/components/editor/editor";
 import { WebsiteRenderer } from "@/components/website/registry";
 import { definitions } from "@/lib/models";
-import { upload, updateBusiness, createPage } from "@/server/actions";
+import { updateBusiness, createPage } from "@/server/actions";
 
 export function Dashboard({
   data,
@@ -50,7 +56,8 @@ export function Dashboard({
   initialTab?: string;
 }) {
   const router = useRouter();
-  const access = subscriptionAccess(data.subscription);
+  const [imageProgress, setImageProgress] = useState<ImageState | null>(null);
+
   const tab = initialTab;
   const [sidebar, setSidebar] = useState(false);
   const sidebarTrigger = useRef<HTMLButtonElement>(null);
@@ -186,9 +193,7 @@ export function Dashboard({
                 className="button compact subscription-badge"
                 onClick={() => navigate("Subscription & Billing")}
               >
-                {access.status === "trialing"
-                  ? `Trial · ${access.remainingDays} days left`
-                  : access.status.replaceAll("_", " ")}
+                Free Core
               </button>
             )}
             {canWebsite && data.pages.length > 0 && (
@@ -241,7 +246,7 @@ export function Dashboard({
               canConfigure={data.navigationCapabilities.includes(
                 "modules:manage",
               )}
-              canWrite={access.allowed}
+              canWrite={true}
             />
           )}
           {tab === "Subscription & Billing" && (
@@ -388,7 +393,7 @@ export function Dashboard({
                   ))}
               </div>
               <div className="bottom-note">
-                <span>SERVQO · Business overview</span>
+                <span>SERVQOO · Business overview</span>
               </div>
             </>
           )}
@@ -506,12 +511,15 @@ export function Dashboard({
             </>
           )}
           {tab === "POS / Cashier" && (
-            <PosScreen data={data} enabled={access.allowed} />
+            <PosScreen
+              data={data}
+              enabled={moduleAccess("pos", data.modules) === "enabled"}
+            />
           )}
           {tab === "Orders" && (
             <OrdersScreen
               merchantId={data.business.id}
-              enabled={access.allowed}
+              enabled={data.navigationCapabilities.includes("orders:manage")}
             />
           )}
           {tab === "Menu Manager" && (
@@ -566,8 +574,10 @@ export function Dashboard({
               <PageHeading
                 eyebrow="YOUR BRAND, IN PICTURES"
                 title="A picture of your world."
-                description="Upload JPEG, PNG or WebP images up to 4 MB. Files are stored in Supabase Storage (merchant-media)."
+                description="Choose JPEG, PNG or WebP up to 20 MiB. Images are optimized to fit 1920 pixels and 2 MiB before upload."
               />
+              <CompanyStorage merchantId={data.business.id} />
+              <ImageProgress state={imageProgress} />
               <div className="upload-zone">
                 <Images size={30} />
                 <h3>A little glimpse of your business</h3>
@@ -580,11 +590,16 @@ export function Dashboard({
                     disabled={pending}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
+                      e.target.value = "";
                       if (!file) return;
-                      const form = new FormData();
-                      form.set("file", file);
                       run(
-                        () => upload(data.business.id, form),
+                        () =>
+                          uploadOptimizedImage(
+                            file,
+                            data.business.id,
+                            "media",
+                            setImageProgress,
+                          ),
                         "Image added to your library.",
                       );
                     }}
@@ -612,7 +627,11 @@ export function Dashboard({
                         </button>
                         <button
                           className="button compact media-delete-link"
-                          disabled={!access.allowed}
+                          disabled={
+                            !data.navigationCapabilities.includes(
+                              "media:manage",
+                            )
+                          }
                           onClick={() => setDeleteAsset(m)}
                         >
                           <Trash2 size={14} /> Delete
@@ -630,6 +649,7 @@ export function Dashboard({
                     setDeletedMedia((ids) => [...ids, deleteAsset.id]);
                     setDeleteAsset(null);
                     setNotice("Image deleted from your library and storage.");
+                    window.dispatchEvent(new Event("servqoo:media-change"));
                     router.refresh();
                   }}
                 />

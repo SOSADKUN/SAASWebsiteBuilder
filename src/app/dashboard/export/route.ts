@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         subscriptionEvents: s.subscriptionEvents,
         modules: s.merchantModules,
         moduleEntitlements: s.moduleEntitlements,
+        moduleTrials: s.moduleTrials,
         orders: s.orders,
         orderItems: s.orderItems,
         orderEvents: s.orderEvents,

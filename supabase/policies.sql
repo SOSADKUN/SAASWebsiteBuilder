@@ -38,7 +38,7 @@ ON CONFLICT(id) DO UPDATE SET public=true,file_size_limit=5242880,allowed_mime_t
 DROP POLICY IF EXISTS merchant_upload ON storage.objects;
 CREATE POLICY merchant_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (
  bucket_id='merchant-media' AND public.is_merchant_member((storage.foldername(name))[1]::uuid)
- AND public.merchant_has_subscription((storage.foldername(name))[1]::uuid)
+
 );
 DROP POLICY IF EXISTS merchant_remove_upload ON storage.objects;
 DROP POLICY IF EXISTS merchant_read_upload ON storage.objects;
@@ -72,13 +72,13 @@ DO $$ DECLARE t text; cap text; mod text; BEGIN
 END $$;
 DROP POLICY IF EXISTS merchant_upload ON storage.objects;
 CREATE POLICY merchant_upload ON storage.objects FOR INSERT TO authenticated WITH CHECK (
- bucket_id='merchant-media' AND public.merchant_has_subscription((storage.foldername(name))[1]::uuid)
+ bucket_id='merchant-media'
  AND ((public.has_merchant_capability((storage.foldername(name))[1]::uuid,'media:manage') AND public.has_business_module((storage.foldername(name))[1]::uuid,'media'))
  OR (public.has_merchant_capability((storage.foldername(name))[1]::uuid,'menu:manage') AND public.has_business_module((storage.foldername(name))[1]::uuid,'catalog')))
 );
 DROP POLICY IF EXISTS merchant_remove_upload ON storage.objects;
 CREATE POLICY merchant_remove_upload ON storage.objects FOR DELETE TO authenticated USING (
- bucket_id='merchant-media' AND public.merchant_has_subscription((storage.foldername(name))[1]::uuid)
+ bucket_id='merchant-media'
  AND public.has_merchant_capability((storage.foldername(name))[1]::uuid,'media:manage')
  AND public.has_business_module((storage.foldername(name))[1]::uuid,'media')
 );

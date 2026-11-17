@@ -23,7 +23,8 @@ type ModuleDefinition = {
   optional: boolean;
   dependencies: string[];
   capabilities: MerchantCapability[];
-  subscription: "writes";
+  accessPolicy: "free" | "paid";
+  trialEligible: boolean;
   entitlement: "included" | "separate";
   suggestedTypes: BusinessType[];
   navigation?: { label: string; href?: string };
@@ -47,7 +48,8 @@ function module(
     optional,
     dependencies,
     capabilities,
-    subscription: "writes",
+    accessPolicy: category === "core" ? "free" : "paid",
+    trialEligible: category !== "core",
     entitlement: "included",
     suggestedTypes: all,
     demoMonthlyPrice: servicePricing[key] ?? null,
@@ -64,6 +66,8 @@ function future(
     ...module(key, name, category, ["modules:manage"], dependencies),
     availability: "coming_soon",
     entitlement: "separate",
+    accessPolicy: "paid",
+    trialEligible: false,
     suggestedTypes,
     navigation: { label: name },
     demoMonthlyPrice: servicePricing[key] ?? null,
@@ -87,9 +91,16 @@ export const businessModules: readonly ModuleDefinition[] = [
     false,
   ),
   module("settings", "Settings", "core", ["settings:view"], [], false),
-  module("website", "Website Builder", "core", ["website:view"]),
-  module("media", "Media Management", "core", ["media:view"], ["website"]),
-  module("catalog", "Product / Menu Catalog", "core", ["menu:view"]),
+  module("website", "Website Builder", "core", ["website:view"], [], false),
+  module(
+    "media",
+    "Media Management",
+    "core",
+    ["media:view"],
+    ["website"],
+    false,
+  ),
+  module("catalog", "Product / Menu Catalog", "core", ["menu:view"], [], false),
   {
     ...module(
       "pos",
@@ -199,6 +210,7 @@ export type ModuleState = {
   enabled: boolean;
   entitled: boolean;
   expiresAt: string | null;
+  entitlementSource?: "free" | "trial" | "verified" | "none";
 };
 export function defaultModuleKeys(type: BusinessType) {
   return businessModules
@@ -251,3 +263,24 @@ export const capabilityModules: Partial<Record<MerchantCapability, string>> = {
   "business:view": "business",
   "business:manage": "business",
 };
+
+// Retained reads/fulfilment are distinct from authorization to start operations.
+// Missing configuration or disabled implementations still fail closed.
+export function moduleReadable(
+  key: string,
+  states: readonly ModuleState[],
+  visited = new Set<string>(),
+): boolean {
+  const def = businessModules.find((m) => m.key === key);
+  const state = states.find((m) => m.key === key);
+  if (
+    !def ||
+    def.availability !== "implemented" ||
+    !state?.enabled ||
+    state.available === false ||
+    visited.has(key)
+  )
+    return false;
+  const next = new Set(visited).add(key);
+  return def.dependencies.every((dep) => moduleReadable(dep, states, next));
+}

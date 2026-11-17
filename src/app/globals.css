@@ -2701,3 +2701,30 @@ td code {
     padding: 25px;
   }
 }
+
+.company-storage {
+  margin-bottom: 1rem;
+}
+.company-storage progress,
+.image-progress progress {
+  width: 100%;
+  height: 0.65rem;
+  accent-color: #346b50;
+}
+.image-progress {
+  padding: 0.6rem 0;
+  font-size: 0.85rem;
+}
+.image-progress p {
+  margin: 0.25rem 0;
+}
+
+.servqoo-signup-policy {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0 0 20px;
+  color: #52675a;
+}
+.servqoo-signup-policy a {
+  text-decoration: underline;
+}

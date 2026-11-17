@@ -4,6 +4,11 @@ import { MAX_UPLOAD_LABEL } from "./uploads";
 
 export function productImageErrorMessage(error: unknown) {
   if (error instanceof Error) {
+    if (
+      error.message.startsWith("Company storage quota exceeded") ||
+      error.message.startsWith("Upload could not be confirmed")
+    )
+      return error.message;
     if (error.message === `Choose an image up to ${MAX_UPLOAD_LABEL}`)
       return `Choose an image up to ${MAX_UPLOAD_LABEL}.`;
     if (error.message === "Only valid JPEG, PNG and WebP images are accepted")

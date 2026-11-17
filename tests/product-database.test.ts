@@ -1,3 +1,5 @@
+import { storagePolicySql } from "../src/lib/storage-policy";
+import sharp from "sharp";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFile, readdir } from "node:fs/promises";
@@ -25,6 +27,19 @@ vi.mock("@/lib/auth", () => ({
   user: vi.fn(),
   admin: vi.fn(),
   supabase: mocks.supabase,
+}));
+vi.mock("@/lib/storage-admin", () => ({
+  storageAdmin: () => ({
+    storage: {
+      from: () => ({
+        upload: mocks.storageUpload,
+        remove: mocks.storageRemove,
+        getPublicUrl: () => ({
+          data: { publicUrl: "https://images.example.test/product.jpg" },
+        }),
+      }),
+    },
+  }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({
@@ -59,10 +74,16 @@ beforeAll(async () => {
   await database.exec(
     "CREATE ROLE anon; CREATE ROLE authenticated; CREATE SCHEMA auth; CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT NULL::uuid $$;",
   );
+  await database.exec(
+    "CREATE SCHEMA storage; CREATE TABLE storage.objects(bucket_id text,name text,metadata jsonb); CREATE TABLE storage.buckets(id text,file_size_limit bigint,allowed_mime_types text[]); ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;",
+  );
   for (const file of (await readdir("drizzle"))
     .filter((file) => file.endsWith(".sql"))
     .sort())
     await database.exec(await readFile(`drizzle/${file}`, "utf8"));
+  await database.exec(
+    storagePolicySql(await readFile("supabase/storage-quota.sql", "utf8")),
+  );
   await database.query(
     "INSERT INTO merchants(id,name,slug) VALUES ($1,'Test cafe','product-test'),($2,'Other cafe','other-product-test')",
     [merchantId, otherMerchantId],
@@ -103,9 +124,21 @@ describe("product writes against migrated PostgreSQL", () => {
     const form = new FormData();
     form.set(
       "file",
-      new File([new Uint8Array([0xff, 0xd8, 0xff, 0])], "coffee.jpg", {
-        type: "image/jpeg",
-      }),
+      new File(
+        [
+          new Uint8Array(
+            await sharp({
+              create: { width: 10, height: 10, channels: 3, background: "red" },
+            })
+              .jpeg()
+              .toBuffer(),
+          ),
+        ],
+        "coffee.jpg",
+        {
+          type: "image/jpeg",
+        },
+      ),
     );
     expect(await uploadMenuProductImage(merchantId, form)).toEqual({
       ok: true,
@@ -135,12 +168,12 @@ describe("product writes against migrated PostgreSQL", () => {
     });
     expect(mocks.storageUpload).not.toHaveBeenCalled();
   });
-  it("retains subscription enforcement for product images", async () => {
+  it("still validates product images after expiry", async () => {
     expect(
       await uploadMenuProductImage(expiredMerchantId, new FormData()),
     ).toMatchObject({
       ok: false,
-      error: expect.stringContaining("trial has ended"),
+      error: expect.stringContaining("Choose an image"),
     });
     expect(mocks.storageUpload).not.toHaveBeenCalled();
   });
@@ -233,10 +266,20 @@ describe("product writes against migrated PostgreSQL", () => {
     });
     expect(mocks.db).not.toHaveBeenCalled();
   });
-  it("keeps subscription enforcement and explains an expired trial", async () => {
+  it("allows free catalog writes after trial expiry while preserving category isolation", async () => {
+    const row = await database.query<{ id: string }>(
+      "INSERT INTO menu_categories(merchant_id,name)VALUES($1,'Free catalog')RETURNING id",
+      [expiredMerchantId],
+    );
+    expect(
+      await saveMenuProduct(expiredMerchantId, {
+        ...product,
+        categoryId: row.rows[0].id,
+      }),
+    ).toEqual({ ok: true });
     expect(await saveMenuProduct(expiredMerchantId, product)).toMatchObject({
       ok: false,
-      error: expect.stringContaining("trial has ended"),
+      error: expect.stringContaining("category"),
     });
     expect(
       (
@@ -245,7 +288,7 @@ describe("product writes against migrated PostgreSQL", () => {
           [expiredMerchantId],
         )
       ).rows,
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
   it("does not update another merchant's product", async () => {
     const inserted = await database.query<{ id: string }>(

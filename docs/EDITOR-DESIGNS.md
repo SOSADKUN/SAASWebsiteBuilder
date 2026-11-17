@@ -1,5 +1,7 @@
 # Editor design selection
 
+Current policy: [Project Guide](SERVQOO_PROJECT_GUIDE.md).
+
 Layouts are selected in Website Editor. The standalone Component Store and
 Design Gallery navigation entries have been removed; their old URLs redirect to
 the editor. Existing merchant entitlements are preserved by component key.
@@ -8,8 +10,12 @@ Each section's layout dropdown has a preview button and, for locked layouts, a
 lock/price button. Selecting a locked design changes only the working preview.
 Text, photos and colors remain editable. Save draft and Publish are disabled
 while any selected design is locked or unavailable, including hidden sections.
-The server independently validates the merchant, subscription, active catalog,
+The server independently validates the merchant, capability, active catalog,
 supported version and entitlements on every save.
+
+Free Core draft/publish does not need a base subscription. The explicit new demo
+design unlock still has its separate existing subscription gate; already owned
+designs remain usable after expiry.
 
 The lock button opens **Demo checkout — no payment collected**. Confirming grants
 the merchant an idempotent entitlement with `source = 'demo'`. It never records a
@@ -36,13 +42,11 @@ New header layouts use version 3. Version 1 and 2 renderers remain available for
 saved and published content; choosing **Use updated layout** or another header
 in the editor is the explicit upgrade. Existing publications are not rewritten.
 
-Before deploying, apply `drizzle/0004_header_layout_versions.sql` through the normal
-migration command:
-
-```powershell
-npm.cmd run db:migrate
-npm.cmd run db:check
-```
+Header registration requires migration 0004, but the current application also
+requires later migrations through 0008 plus matching policies/catalog. The
+migration command applies **all pending** changes, not a single header patch.
+Follow the [current migration workflow](SERVQOO_PROJECT_GUIDE.md#18-database-migration-workflow)
+and [deployment runbook](../DEPLOYMENT.md) before any external execution.
 
 The additive migration copies existing header settings-schema registrations to
 version 3. It does not change page content, existing versions, prices or ownership.

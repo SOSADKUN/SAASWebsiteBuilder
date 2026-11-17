@@ -1,4 +1,9 @@
 "use client";
+import {
+  uploadOptimizedImage,
+  type ImageProgress as ImageState,
+} from "@/lib/image-upload";
+import { ImageProgress } from "@/components/image-progress";
 import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import { MediaPicker } from "./media-picker";
 import { DesignPicker, type DesignOffer } from "./design-picker";
@@ -44,7 +49,7 @@ import {
   type Product,
 } from "@/lib/models";
 import { WebsiteRenderer } from "@/components/website/registry";
-import { upload, restoreDraft } from "@/server/actions";
+import { restoreDraft } from "@/server/actions";
 import { saveEditorLayout } from "@/server/design-actions";
 type Page = { id: string; title: string; draft: Section[]; revision: number };
 function SectionRow({
@@ -158,6 +163,7 @@ export function Editor({
   const [device, setDevice] = useState("desktop");
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
+  const [imageProgress, setImageProgress] = useState<ImageState | null>(null);
   const [busy, setBusy] = useState(false);
   const current = sections.find((s) => s.id === selected);
   const dirty = JSON.stringify(sections) !== JSON.stringify(saved);
@@ -535,6 +541,7 @@ export function Editor({
                   alt="Section image"
                 />
               )}
+              <ImageProgress state={imageProgress} />
               <label className="upload-label">
                 Upload image
                 <input
@@ -543,13 +550,17 @@ export function Editor({
                   disabled={busy}
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
+                    e.target.value = "";
                     if (!file) return;
                     const sectionId = current.id;
                     setBusy(true);
                     try {
-                      const form = new FormData();
-                      form.set("file", file);
-                      const image = await upload(business.id, form);
+                      const image = await uploadOptimizedImage(
+                        file,
+                        business.id,
+                        "media",
+                        setImageProgress,
+                      );
                       setSections((latest) =>
                         latest.map((s) =>
                           s.id === sectionId

@@ -3,8 +3,8 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import * as s from "@/db/schema";
-import { authorize, supabase } from "@/lib/auth";
-import { requireSubscription } from "@/lib/subscription-service";
+import { authorize } from "@/lib/auth";
+import { storageAdmin } from "@/lib/storage-admin";
 
 export async function loadOverviewMetrics(merchantId: string) {
   await authorize(z.uuid().parse(merchantId), "reports:view");
@@ -13,6 +13,7 @@ export async function loadOverviewMetrics(merchantId: string) {
   const [row] = await db()
     .select({
       revenue: sql<string>`coalesce(sum(${s.orders.total}), 0)::text`,
+      recordedCash: sql<string>`coalesce(sum(CASE WHEN ${s.orders.payment} = 'cash' AND ${s.orders.cashReceived} >= ${s.orders.total} THEN ${s.orders.total} ELSE 0 END),0)::text`,
       completedOrders: count(),
       employees: sql<number>`(select count(*)::int from ${s.memberships} where ${s.memberships.merchantId} = ${merchantId})`,
     })
@@ -27,6 +28,7 @@ export async function loadOverviewMetrics(merchantId: string) {
     );
   return {
     revenue: Number(row.revenue),
+    recordedCash: Number(row.recordedCash),
     completedOrders: row.completedOrders,
     employees: Number(row.employees),
   };
@@ -35,7 +37,7 @@ export async function loadOverviewMetrics(merchantId: string) {
 export async function removeMediaAsset(merchantId: string, assetId: string) {
   await authorize(z.uuid().parse(merchantId), "media:manage");
   z.uuid().parse(assetId);
-  await requireSubscription(merchantId);
+
   const database = db();
   const asset = await database.query.media.findFirst({
     where: and(eq(s.media.id, assetId), eq(s.media.merchantId, merchantId)),
@@ -48,7 +50,7 @@ export async function removeMediaAsset(merchantId: string, assetId: string) {
     asset.path.includes("..")
   )
     throw new Error("Invalid media path");
-  const client = await supabase();
+  const client = storageAdmin();
   const bucket = client.storage.from("merchant-media");
   const { error } = await bucket.remove([asset.path]);
   if (error) throw new Error("Storage removal failed");
@@ -69,7 +71,30 @@ export async function removeMediaAsset(merchantId: string, assetId: string) {
   // Storage and SQL cannot share a transaction. Keep the record on storage
   // failure. If SQL fails after removal, retry safely removes the absent object
   // again before clearing the remaining metadata.
-  await database
-    .delete(s.media)
-    .where(and(eq(s.media.id, assetId), eq(s.media.merchantId, merchantId)));
+  await database.transaction(async (tx) => {
+    await tx
+      .select({ id: s.merchants.id })
+      .from(s.merchants)
+      .where(eq(s.merchants.id, merchantId))
+      .for("update");
+    const result = await tx.execute(
+      sql`select name from storage.objects where bucket_id='merchant-media' and name=${asset.path}`,
+    );
+    const rows = Array.isArray(result)
+      ? result
+      : (result as { rows: unknown[] }).rows;
+    if (rows.length) throw new Error("Storage removal failed");
+    // Cancelling under the insert guard's same lock closes late-upload races.
+    await tx
+      .delete(s.mediaReservations)
+      .where(
+        and(
+          eq(s.mediaReservations.merchantId, merchantId),
+          eq(s.mediaReservations.path, asset.path),
+        ),
+      );
+    await tx
+      .delete(s.media)
+      .where(and(eq(s.media.id, assetId), eq(s.media.merchantId, merchantId)));
+  });
 }

@@ -16,17 +16,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 import { requireSubscription } from "../src/lib/subscription-service";
-import {
-  saveLayout,
-  restoreDraft,
-  unlock,
-  saveProduct,
-  deleteProduct,
-  saveCategory,
-  deleteCategory,
-  createPage,
-  upload,
-} from "../src/server/actions";
+import { saveLayout, restoreDraft, unlock } from "../src/server/actions";
 const id = "11111111-1111-4111-8111-111111111111";
 beforeEach(() => {
   vi.resetAllMocks();
@@ -60,30 +50,10 @@ describe("server-side subscription enforcement", () => {
       "setup is incomplete",
     );
   });
-  it("blocks every premium server action after trial expiry before mutation", async () => {
-    const form = new FormData();
-    const calls = [
-      () => saveLayout(id, id, [], 0),
-      () => saveLayout(id, id, [], 0, true),
-      () => unlock(id, "hero-split"),
-      () =>
-        saveProduct(id, {
-          name: "Product",
-          description: "",
-          price: 100,
-          image: "",
-          categoryId: id,
-          available: true,
-          position: 0,
-        }),
-      () => deleteProduct(id, id),
-      () => saveCategory(id, "New"),
-      () => deleteCategory(id, id),
-      () => createPage(id, "New", "/new"),
-      () => upload(id, form),
-    ];
-    for (const call of calls)
-      await expect(call()).rejects.toThrow("Subscription required");
+  it("keeps the separate premium design demo gate after expiry", async () => {
+    await expect(unlock(id, "hero-split")).rejects.toThrow(
+      "Subscription required",
+    );
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
   it("allows reloading the saved draft after expiry because it is read-only", async () => {

@@ -1,3 +1,4 @@
+import { storagePolicySql } from "../src/lib/storage-policy";
 import { PGlite } from "@electric-sql/pglite";
 import { readFile, readdir } from "node:fs/promises";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
@@ -21,7 +22,7 @@ beforeAll(async () => {
  GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
  CREATE SCHEMA storage;
  CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
- CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text);
+ CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text,metadata jsonb);
  ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
  GRANT USAGE ON SCHEMA storage TO authenticated;
  GRANT SELECT, INSERT, DELETE ON storage.objects TO authenticated;
@@ -39,6 +40,9 @@ beforeAll(async () => {
     await database.exec(await readFile(`drizzle/${filename}`, "utf8"));
   }
   await database.exec(await readFile("supabase/policies.sql", "utf8"));
+  await database.exec(
+    storagePolicySql(await readFile("supabase/storage-quota.sql", "utf8")),
+  );
   await database.exec(`
  INSERT INTO user_profiles(id,name) VALUES ('${userA}','A'),('${userB}','B');
  INSERT INTO merchants(id,name,slug) VALUES ('${merchantA}','Café A','cafe-a'),('${merchantB}','Café B','cafe-b');
@@ -269,7 +273,7 @@ describe("PostgreSQL migrations and tenant RLS", () => {
         "INSERT INTO storage.objects(bucket_id,name) VALUES ('merchant-media',$1)",
         [old + "/blocked.jpg"],
       ),
-    ).rejects.toThrow(/row-level security/);
+    ).rejects.toThrow();
     await asUser("postgres");
     await database.query(
       "DELETE FROM merchant_users WHERE merchant_id=$1 AND user_id=$2",
@@ -282,7 +286,7 @@ describe("PostgreSQL migrations and tenant RLS", () => {
       tablename: string;
       rowsecurity: boolean;
     }>("SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname='public'");
-    expect(result.rows).toHaveLength(25);
+    expect(result.rows).toHaveLength(28);
     expect(result.rows.every((t) => t.rowsecurity)).toBe(true);
   });
   it("only lets each merchant read its own business and menu records", async () => {
@@ -331,20 +335,17 @@ describe("PostgreSQL migrations and tenant RLS", () => {
       ),
     ).rejects.toThrow(/product_category_tenant_fk/);
   });
-  it("checks tenant ownership on storage paths", async () => {
+  it("blocks direct browser uploads even to the member own path", async () => {
     await asUser("authenticated");
-    await database.query(
-      "INSERT INTO storage.objects(bucket_id,name) VALUES ('merchant-media',$1)",
-      [`${merchantA}/coffee.jpg`],
-    );
-    await expect(
-      database.query(
-        "INSERT INTO storage.objects(bucket_id,name) VALUES ('merchant-media',$1)",
-        [`${merchantB}/coffee.jpg`],
-      ),
-    ).rejects.toThrow(/row-level security/);
+    for (const merchant of [merchantA, merchantB])
+      await expect(
+        database.query(
+          "INSERT INTO storage.objects(bucket_id,name,metadata) VALUES ('merchant-media',$1,'{\"size\":1}')",
+          [`${merchant}/coffee.jpg`],
+        ),
+      ).rejects.toThrow();
     expect(
       (await database.query("SELECT * FROM storage.objects")).rows,
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 });

@@ -17,6 +17,8 @@ import * as s from "@/db/schema";
 import { user, authorize, admin, supabase } from "@/lib/auth";
 import { getApplicationOrigin } from "@/lib/auth-redirect";
 import { registrationErrorMessage } from "@/lib/auth-errors";
+import { validateImage } from "@/lib/image-validation";
+import { storeValidatedImage } from "./storage-service";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
 import { businessTypes, businessModules } from "@/lib/business-modules";
 import { recommendedServices } from "@/lib/system-services";
@@ -278,7 +280,7 @@ export async function saveLayout(
   publish = false,
 ) {
   await authorize(z.uuid().parse(merchantId), "website:manage");
-  await requireSubscription(merchantId);
+
   z.uuid().parse(pageId);
   layoutSchema.parse(sections);
   z.number().int().min(0).parse(expectedRevision);
@@ -364,6 +366,7 @@ export async function restoreDraft(merchantId: string, pageId: string) {
 }
 export async function unlock(merchantId: string, key: string) {
   await authorize(z.uuid().parse(merchantId), "marketplace:use");
+
   await requireSubscription(merchantId);
   const definition = await db().query.componentDefinitions.findFirst({
     where: and(
@@ -423,19 +426,15 @@ async function saveProductRecord(
   );
   const value = productSchema.parse(input);
   const database = db();
-  // Independent reads may use separate pool connections once membership and
-  // capability are verified. Both must succeed before any product is written.
-  const [, category] = await Promise.all([
-    trace.step("subscription", () => requireSubscription(merchantId)),
-    trace.step("category", () =>
-      database.query.categories.findFirst({
-        where: and(
-          eq(s.categories.id, value.categoryId),
-          eq(s.categories.merchantId, merchantId),
-        ),
-      }),
-    ),
-  ]);
+  // Free catalog writes still validate the category within this merchant.
+  const category = await trace.step("category", () =>
+    database.query.categories.findFirst({
+      where: and(
+        eq(s.categories.id, value.categoryId),
+        eq(s.categories.merchantId, merchantId),
+      ),
+    }),
+  );
   if (!category) throw new Error("Invalid category");
   await trace.step("product_write", async () => {
     if (value.id) {
@@ -459,7 +458,7 @@ async function saveProductRecord(
 }
 export async function deleteProduct(merchantId: string, id: string) {
   await authorize(merchantId, "menu:manage");
-  await requireSubscription(merchantId);
+
   await db()
     .delete(s.products)
     .where(
@@ -476,7 +475,7 @@ export async function saveCategory(
   id?: string,
 ) {
   await authorize(merchantId, "menu:manage");
-  await requireSubscription(merchantId);
+
   name = z.string().min(1).max(60).parse(name);
   if (id)
     await db()
@@ -493,7 +492,7 @@ export async function saveCategory(
 }
 export async function deleteCategory(merchantId: string, id: string) {
   await authorize(merchantId, "menu:manage");
-  await requireSubscription(merchantId);
+
   const product = await db().query.products.findFirst({
     where: and(
       eq(s.products.merchantId, merchantId),
@@ -515,7 +514,7 @@ export async function createPage(
   path: string,
 ) {
   await authorize(merchantId, "website:manage");
-  await requireSubscription(merchantId);
+
   title = z.string().min(1).max(80).parse(title);
   path = z
     .string()
@@ -588,7 +587,7 @@ async function uploadAssetRecord(
   capability: "media:manage" | "menu:manage",
 ) {
   await authorize(z.uuid().parse(merchantId), capability);
-  await requireSubscription(merchantId);
+
   const file = form.get("file");
   if (
     !(file instanceof File) ||
@@ -597,51 +596,17 @@ async function uploadAssetRecord(
   )
     throw new Error(`Choose an image up to ${MAX_UPLOAD_LABEL}`);
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let extension = "";
-  if (
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff &&
-    file.type === "image/jpeg"
-  )
-    extension = "jpg";
-  if (
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    file.type === "image/png"
-  )
-    extension = "png";
-  if (
-    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.slice(8, 12)) === "WEBP" &&
-    file.type === "image/webp"
-  )
-    extension = "webp";
-  if (!extension)
-    throw new Error("Only valid JPEG, PNG and WebP images are accepted");
-  const path = `${merchantId}/${crypto.randomUUID()}.${extension}`;
-  const client = await supabase();
-  const { error } = await client.storage
-    .from("merchant-media")
-    .upload(path, bytes, { contentType: file.type, upsert: false });
-  if (error) throw new Error(error.message);
-  const { data } = client.storage.from("merchant-media").getPublicUrl(path);
-  try {
-    await db()
-      .insert(s.media)
-      .values({
-        merchantId,
-        path,
-        url: data.publicUrl,
-        name: file.name.slice(0, 150),
-      });
-  } catch (error) {
-    await client.storage.from("merchant-media").remove([path]);
-    throw error;
-  }
-  return data.publicUrl;
+  const { extension } = await validateImage(bytes, file.type);
+  const requestId = form.get("requestId");
+  const id = requestId ? z.uuid().parse(requestId) : crypto.randomUUID();
+  return storeValidatedImage(
+    merchantId,
+    id,
+    bytes,
+    extension,
+    file.type,
+    file.name,
+  );
 }
 export async function adminListing(form: FormData) {
   await admin();

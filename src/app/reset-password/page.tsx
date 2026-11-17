@@ -3,7 +3,7 @@ import { supabase } from "@/lib/auth";
 import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "Choose a password | SERVQO",
+  title: "Choose a password | SERVQOO",
   robots: { index: false, follow: false },
 };
 export default async function Page({

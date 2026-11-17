@@ -1,3 +1,4 @@
+import { storagePolicySql } from "../src/lib/storage-policy";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFile, readdir } from "node:fs/promises";
@@ -44,14 +45,26 @@ import {
   configureSystemService,
   setBusinessType,
 } from "../src/server/module-actions";
-import { startBusinessSetup } from "../src/server/actions";
+import {
+  saveLayout,
+  createPage,
+  saveProduct,
+  saveCategory,
+  updateBusiness,
+  startBusinessSetup,
+} from "../src/server/actions";
 import { saveBusinessSetup } from "../src/server/onboarding-actions";
-import { merchantModuleState } from "../src/server/module-service";
+import {
+  merchantModuleState,
+  requireModule,
+} from "../src/server/module-service";
 import { dashboardData } from "../src/server/queries";
-import { initialLayout } from "../src/lib/models";
+import { initialLayout, definitions } from "../src/lib/models";
 import {
   createPosOrder,
   operationsSnapshot,
+  changePosOrder,
+  acknowledgePosCancellation,
 } from "../src/server/order-service";
 let database: PGlite;
 let executedQueries: string[] = [];
@@ -79,7 +92,7 @@ beforeAll(async () => {
     GRANT USAGE ON SCHEMA auth TO authenticated,anon; GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;
     CREATE SCHEMA storage;
     CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
-    CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text);
+    CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text,metadata jsonb);
     ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
     GRANT USAGE ON SCHEMA storage TO authenticated; GRANT SELECT,INSERT,DELETE ON storage.objects TO authenticated;
     CREATE FUNCTION storage.foldername(name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ SELECT string_to_array(name,'/') $$;
@@ -115,6 +128,9 @@ beforeAll(async () => {
     await database.exec(await readFile(`drizzle/${file}`, "utf8"));
   }
   await database.exec(await readFile("supabase/policies.sql", "utf8"));
+  await database.exec(
+    storagePolicySql(await readFile("supabase/storage-quota.sql", "utf8")),
+  );
   await database.query(
     "INSERT INTO merchants(id,name,slug,business_type) VALUES($1,'Salon','salon','hair_salon')",
     [other],
@@ -304,12 +320,10 @@ describe("module migration and real authorization", () => {
       "UPDATE business_module_entitlements SET expires_at=now()-interval '1 second' WHERE merchant_id=$1 AND module_key='pos'",
       [merchant],
     );
-    await expect(authorize(merchant, "pos:operate")).rejects.toThrow(
-      "Business module",
-    );
-    expect(await configureModule(merchant, "pos", true)).toMatchObject({
-      ok: false,
-    });
+    // Expiring a legacy row does not revoke a legitimate active trial.
+    await expect(
+      requireModule(merchant, "pos", "write"),
+    ).resolves.toBeUndefined();
     await database.query(
       "UPDATE merchant_modules SET enabled=false WHERE merchant_id=$1 AND module_key='catalog'",
       [merchant],
@@ -369,7 +383,7 @@ describe("module migration and real authorization", () => {
     ).rejects.toThrow("Workspace permission required");
   });
 
-  it("retains subscription write gates when modules have an included license", async () => {
+  it("retains history but denies new paid operations after trial expiry", async () => {
     const expired = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     await database.query(
       "INSERT INTO merchants(id,name,slug,trial_started_at,trial_ends_at) VALUES($1,'Expired','expired-modules',now()-interval '15 days',now()-interval '1 day')",
@@ -379,7 +393,7 @@ describe("module migration and real authorization", () => {
       "INSERT INTO merchant_users(merchant_id,user_id,role) VALUES($1,$2,'owner')",
       [expired, owner],
     );
-    expect(await configureModule(expired, "pos", false)).toMatchObject({
+    expect(await configureModule(expired, "pos", true)).toMatchObject({
       ok: false,
     });
     await expect(authorize(expired, "pos:operate")).resolves.toBeTruthy();
@@ -392,7 +406,7 @@ describe("module migration and real authorization", () => {
         note: "",
         payment: "unpaid",
       }),
-    ).rejects.toThrow("Subscription required");
+    ).rejects.toThrow("Business module");
   });
   it("retains real cafe checkout and scoped order synchronization", async () => {
     login(cashier);
@@ -506,7 +520,7 @@ describe("resumable System Services onboarding", () => {
       expect(
         await saveBusinessSetup(setup.id, {
           step: "services",
-          services: ["catalog", "pos"],
+          services: ["pos"],
         }),
       ).toMatchObject({ ok: false });
       expect(
@@ -528,7 +542,14 @@ describe("resumable System Services onboarding", () => {
         .filter((m) => m.enabled)
         .map((m) => m.key)
         .sort(),
-    ).toEqual(["business", "overview", "settings"]);
+    ).toEqual([
+      "business",
+      "catalog",
+      "media",
+      "overview",
+      "settings",
+      "website",
+    ]);
     expect(
       (
         await database.query("SELECT name FROM user_profiles WHERE id=$1", [
@@ -595,16 +616,12 @@ describe("resumable System Services onboarding", () => {
     expect(
       await saveBusinessSetup(setup.id, {
         step: "service_draft",
-        services: ["website", "media", "catalog"],
+        services: [],
       }),
     ).toEqual({ ok: true });
     const context = await dashboardData();
     expect(context?.business.onboardingStep).toBe("services");
-    expect(context?.business.onboardingServices).toEqual([
-      "website",
-      "media",
-      "catalog",
-    ]);
+    expect(context?.business.onboardingServices).toEqual([]);
     expect(context?.pages).toEqual([]);
     expect(context?.ownerName).toBe("Business Owner");
     const after = await setupRow(setup.id);
@@ -624,7 +641,7 @@ describe("resumable System Services onboarding", () => {
     expect(
       await saveBusinessSetup(setup.id, {
         step: "services",
-        services: ["website", "media", "catalog"],
+        services: [],
       }),
     ).toEqual({ ok: true });
     expect(await saveBusinessSetup(setup.id, { step: "complete" })).toEqual({
@@ -666,11 +683,18 @@ describe("resumable System Services onboarding", () => {
         .filter((m) => m.enabled)
         .map((m) => m.key)
         .sort(),
-    ).toEqual(["business", "overview", "settings"]);
+    ).toEqual([
+      "business",
+      "catalog",
+      "media",
+      "overview",
+      "settings",
+      "website",
+    ]);
     expect((await dashboardData())?.business.onboardingStep).toBe("complete");
     await expect(authorize(setup.id, "data:export")).resolves.toBeTruthy();
   });
-  it("rejects future, missing-source and revoked-license selections on the server", async () => {
+  it("rejects future and missing-source selections while authorizing explicit trials independently of legacy licenses", async () => {
     const setup = await freshSetup();
     await saveBusinessSetup(setup.id, {
       step: "business_type",
@@ -692,13 +716,13 @@ describe("resumable System Services onboarding", () => {
     expect(
       await saveBusinessSetup(setup.id, {
         step: "services",
-        services: ["catalog", "pos"],
+        services: ["pos"],
       }),
-    ).toMatchObject({ ok: false });
+    ).toEqual({ ok: true });
     expect(
       (await merchantModuleState(setup.id)).find((m) => m.key === "pos")
-        ?.enabled,
-    ).toBe(false);
+        ?.entitlementSource,
+    ).toBe("trial");
     expect(
       (
         await database.query(
@@ -716,11 +740,10 @@ describe("resumable System Services onboarding", () => {
     });
     await saveBusinessSetup(setup.id, {
       step: "services",
-      services: ["catalog", "pos"],
+      services: ["pos"],
     });
     await database.query(
-      "UPDATE business_module_entitlements SET expires_at=now()-interval '1 second' WHERE merchant_id=$1 AND module_key='pos'",
-      [setup.id],
+      "UPDATE business_module_definitions SET trial_eligible=false WHERE key='pos'",
     );
     expect(
       await saveBusinessSetup(setup.id, { step: "complete" }),
@@ -730,6 +753,9 @@ describe("resumable System Services onboarding", () => {
       (await merchantModuleState(setup.id)).find((m) => m.key === "pos")
         ?.enabled,
     ).toBe(false);
+    await database.query(
+      "UPDATE business_module_definitions SET trial_eligible=true WHERE key='pos'",
+    );
   });
   it("denies foreign-tenant and non-owner onboarding and service changes", async () => {
     const setup = await freshSetup();
@@ -766,7 +792,7 @@ describe("resumable System Services onboarding", () => {
     const before = await setupRow(id);
     await saveBusinessSetup(id, {
       step: "services",
-      services: ["catalog", "pos"],
+      services: ["pos"],
     });
     expect(await saveBusinessSetup(id, { step: "complete" })).toMatchObject({
       ok: false,
@@ -787,7 +813,7 @@ describe("resumable System Services onboarding", () => {
     });
     await saveBusinessSetup(setup.id, {
       step: "services",
-      services: ["catalog", "pos", "orders"],
+      services: ["pos", "orders"],
     });
     await saveBusinessSetup(setup.id, { step: "complete" });
     const categoryId = (
@@ -814,6 +840,19 @@ describe("resumable System Services onboarding", () => {
       await configureSystemService(setup.id, "pos", false, true),
     ).toMatchObject({ ok: false });
     expect(
+      await configureSystemService(setup.id, "orders", false, true),
+    ).toMatchObject({ ok: false, confirmationRequired: false });
+    await changePosOrder(setup.id, {
+      orderId: ticket.orderId,
+      version: 0,
+      status: "cancelled",
+      reason: "Customer cancelled",
+    });
+    await acknowledgePosCancellation(setup.id, {
+      orderId: ticket.orderId,
+      version: 1,
+    });
+    expect(
       await configureSystemService(setup.id, "orders", false),
     ).toMatchObject({ ok: false, confirmationRequired: true });
     expect(
@@ -836,7 +875,7 @@ describe("resumable System Services onboarding", () => {
           ticket.orderId,
         ])
       ).rows[0],
-    ).toMatchObject({ id: ticket.orderId, status: "pending" });
+    ).toMatchObject({ id: ticket.orderId, status: "cancelled" });
     expect(await configureSystemService(setup.id, "orders", true)).toEqual({
       ok: true,
     });
@@ -864,5 +903,407 @@ describe("resumable System Services onboarding", () => {
         )
       ).rows[0],
     ).toMatchObject({ source: "demo" });
+  });
+});
+
+// Phase B regressions use the real authorization helpers and all SQL migrations.
+async function expiredCompany() {
+  const id = crypto.randomUUID();
+  await database.query(
+    "INSERT INTO merchants(id,name,slug,trial_started_at,trial_ends_at)VALUES($1,'Free company',$2,now()-interval '20 days',now()-interval '6 days')",
+    [id, "free-" + id],
+  );
+  await database.query(
+    "INSERT INTO merchant_users(merchant_id,user_id,role)VALUES($1,$2,'owner')",
+    [id, owner],
+  );
+  return id;
+}
+describe("permanent Free Core and company service trials", () => {
+  it("creates only included Core licenses and immutable dated service trials, with no billing activation", async () => {
+    const setup = await freshSetup();
+    const row = await setupRow(setup.id);
+    expect(+new Date(row.trial_ends_at) - +new Date(row.trial_started_at)).toBe(
+      14 * 86400000,
+    );
+    const trials = await database.query<{
+      module_key: string;
+      starts_at: Date;
+      ends_at: Date;
+    }>("SELECT * FROM merchant_module_trials WHERE merchant_id=$1", [setup.id]);
+    expect(trials.rows.map((t) => t.module_key).sort()).toEqual([
+      "fnb_orders",
+      "kitchen_queue",
+      "pos",
+    ]);
+    for (const t of trials.rows) {
+      expect(t.starts_at).toEqual(row.trial_started_at);
+      expect(t.ends_at).toEqual(row.trial_ends_at);
+    }
+    const licenses = await database.query<{
+      module_key: string;
+      source: string;
+      verified_at: null;
+    }>("SELECT * FROM business_module_entitlements WHERE merchant_id=$1", [
+      setup.id,
+    ]);
+    expect(licenses.rows).toHaveLength(6);
+    expect(
+      licenses.rows.every(
+        (e) =>
+          e.source === "included" &&
+          e.verified_at === null &&
+          !["pos", "fnb_orders", "kitchen_queue"].includes(e.module_key),
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await database.query(
+          "SELECT status,payment_verified_at FROM merchant_subscriptions WHERE merchant_id=$1",
+          [setup.id],
+        )
+      ).rows[0],
+    ).toMatchObject({ status: "trialing", payment_verified_at: null });
+    await expect(
+      database.query(
+        "INSERT INTO merchant_module_trials(merchant_id,module_key,starts_at,ends_at)VALUES($1,'appointments',now(),now()+interval '14 days')",
+        [setup.id],
+      ),
+    ).rejects.toThrow("Invalid service trial");
+    await expect(
+      database.query(
+        "UPDATE merchant_module_trials SET ends_at=now()+interval '90 days' WHERE merchant_id=$1",
+        [setup.id],
+      ),
+    ).rejects.toThrow("immutable");
+    await expect(
+      database.query(
+        "DELETE FROM merchant_module_trials WHERE merchant_id=$1",
+        [setup.id],
+      ),
+    ).rejects.toThrow("immutable");
+    expect(
+      await browser(owner, () =>
+        database.query(
+          "SELECT * FROM merchant_module_trials WHERE merchant_id=$1",
+          [setup.id],
+        ),
+      ),
+    ).toMatchObject({ rows: [] }); // freshSetup uses a different owner
+    await expect(
+      browser(setup.actor, () =>
+        database.query(
+          "UPDATE merchant_module_trials SET ends_at=now() WHERE merchant_id=$1",
+          [setup.id],
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+  it("does not shorten a legitimate trial when a verified license has an earlier end", async () => {
+    const setup = await freshSetup();
+    const before = await setupRow(setup.id);
+    await database.query(
+      "INSERT INTO business_module_entitlements(merchant_id,module_key,source,verified_at,expires_at)VALUES($1,'pos','admin',now(),now()+interval '1 day')",
+      [setup.id],
+    );
+    const pos = (await merchantModuleState(setup.id)).find(
+      (m) => m.key === "pos",
+    );
+    expect(pos).toMatchObject({
+      entitled: true,
+      entitlementSource: "trial",
+      expiresAt: before.trial_ends_at.toISOString(),
+    });
+  });
+  it("allows every implemented eligible service for a non-recommended business without restarting its trial", async () => {
+    const setup = await freshSetup();
+    const before = await setupRow(setup.id);
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "business_type",
+        businessType: "hair_salon",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await saveBusinessSetup(setup.id, {
+        step: "services",
+        services: ["pos", "orders"],
+      }),
+    ).toEqual({ ok: true });
+    expect(await saveBusinessSetup(setup.id, { step: "complete" })).toEqual({
+      ok: true,
+    });
+    for (const key of ["pos", "fnb_orders", "kitchen_queue"])
+      await expect(
+        requireModule(setup.id, key, "write"),
+      ).resolves.toBeUndefined();
+    expect(await configureSystemService(setup.id, "orders", false)).toEqual({
+      ok: true,
+    });
+    expect(await configureSystemService(setup.id, "orders", true)).toEqual({
+      ok: true,
+    });
+    expect((await setupRow(setup.id)).trial_ends_at).toEqual(
+      before.trial_ends_at,
+    );
+    expect(
+      (
+        await database.query(
+          "SELECT * FROM business_module_entitlements WHERE merchant_id=$1 AND module_key IN ('pos','fnb_orders','kitchen_queue')",
+          [setup.id],
+        )
+      ).rows,
+    ).toEqual([]);
+  });
+  it("keeps Dashboard, business, catalog, multi-page draft and publish available after expiry; premium ownership stays separate", async () => {
+    const id = await expiredCompany();
+    const site = await database.query<{ id: string }>(
+      "INSERT INTO websites(merchant_id,title)VALUES($1,'Free site')RETURNING id",
+      [id],
+    );
+    await createPage(id, "Contact", "/contact");
+    await createPage(id, "About", "/about");
+    const layout = initialLayout("Free site");
+    // Register the existing deployed catalog; this does not grant ownership.
+    for (const d of definitions) {
+      await database.query(
+        "INSERT INTO component_definitions(key,name,category,premium)VALUES($1,$2,$3,$4)ON CONFLICT(key)DO NOTHING",
+        [d.key, d.name, d.type, d.premium],
+      );
+      await database.query(
+        "INSERT INTO component_versions(component_key,version,schema)VALUES($1,$2,'{}')ON CONFLICT DO NOTHING",
+        [d.key, d.version],
+      );
+    }
+    const page = await database.query<{ id: string }>(
+      "SELECT id FROM pages WHERE merchant_id=$1 AND path='/about'",
+      [id],
+    );
+    await saveLayout(id, page.rows[0].id, layout, 0);
+    await saveLayout(id, page.rows[0].id, layout, 1, true);
+    expect(
+      (
+        await database.query("SELECT published FROM pages WHERE id=$1", [
+          page.rows[0].id,
+        ])
+      ).rows[0],
+    ).toMatchObject({ published: layout });
+    await expect(
+      database.query(
+        "INSERT INTO websites(merchant_id,title)VALUES($1,'Second property')",
+        [id],
+      ),
+    ).rejects.toThrow();
+    expect(
+      (
+        await database.query("SELECT * FROM pages WHERE website_id=$1", [
+          site.rows[0].id,
+        ])
+      ).rows,
+    ).toHaveLength(2);
+    await saveCategory(id, "Free category");
+    const cat = await database.query<{ id: string }>(
+      "SELECT id FROM menu_categories WHERE merchant_id=$1",
+      [id],
+    );
+    await saveProduct(id, {
+      name: "Free product",
+      description: "",
+      price: 100,
+      image: "",
+      categoryId: cat.rows[0].id,
+      available: true,
+      position: 0,
+    });
+    const form = new FormData();
+    for (const [k, v] of Object.entries({
+      name: "Updated company",
+      description: "",
+      address: "",
+      hours: "",
+      phone: "",
+    }))
+      form.set(k, v);
+    await updateBusiness(id, form);
+    const viewer = crypto.randomUUID();
+    await database.query(
+      "INSERT INTO user_profiles(id,name)VALUES($1,'Free Core owner')",
+      [viewer],
+    );
+    await database.query(
+      "INSERT INTO merchant_users(merchant_id,user_id,role)VALUES($1,$2,'owner')",
+      [id, viewer],
+    );
+    login(viewer);
+    expect((await dashboardData())?.business.id).toBe(id);
+    login();
+    await expect(authorize(id, "data:export")).resolves.toBeTruthy();
+    await expect(
+      requireModule(id, "overview", "read"),
+    ).resolves.toBeUndefined();
+    for (const key of ["website", "media", "catalog", "business", "settings"])
+      await expect(requireModule(id, key, "write")).resolves.toBeUndefined();
+    const premium = structuredClone(layout);
+    premium[0] = { ...premium[0], key: "header-centered", version: 3 };
+    await expect(saveLayout(id, page.rows[0].id, premium, 2)).rejects.toThrow();
+    expect(
+      (
+        await database.query(
+          "SELECT * FROM merchant_entitlements WHERE merchant_id=$1",
+          [id],
+        )
+      ).rows,
+    ).toEqual([]);
+    await database.query(
+      "INSERT INTO merchant_entitlements(merchant_id,component_key,source)VALUES($1,'header-centered','demo')",
+      [id],
+    );
+    await saveLayout(id, page.rows[0].id, premium, 2);
+    await saveLayout(id, page.rows[0].id, premium, 3, true);
+    await expect(authorize(other, "website:manage")).rejects.toThrow(
+      "Business access denied",
+    );
+  });
+  it("requires company-specific verified service periods after expiry, ignoring legacy and base-subscription activation", async () => {
+    const id = await expiredCompany();
+    const foreign = await expiredCompany();
+    await database.query(
+      "INSERT INTO business_module_entitlements(merchant_id,module_key,source)VALUES($1,'pos','legacy')",
+      [id],
+    );
+    await expect(requireModule(id, "pos", "read")).resolves.toBeUndefined();
+    await expect(requireModule(id, "pos", "write")).rejects.toThrow(
+      "Business module",
+    );
+    await database.query(
+      "UPDATE merchant_subscriptions SET status='active',payment_verified_at=now(),verification_source='admin',current_period_ends_at=now()+interval '30 days' WHERE merchant_id=$1",
+      [id],
+    );
+    await expect(requireModule(id, "pos", "write")).rejects.toThrow(
+      "Business module",
+    );
+    await database.query(
+      "UPDATE business_module_entitlements SET source='provider',expires_at=now()+interval '30 days' WHERE merchant_id=$1 AND module_key='pos'",
+      [id],
+    );
+    await expect(requireModule(id, "pos", "write")).rejects.toThrow(
+      "Business module",
+    );
+    await database.query(
+      "UPDATE business_module_entitlements SET verified_at=now() WHERE merchant_id=$1 AND module_key='pos'",
+      [id],
+    );
+    await expect(requireModule(id, "pos", "write")).resolves.toBeUndefined();
+    await expect(requireModule(foreign, "pos", "write")).rejects.toThrow(
+      "Business module",
+    );
+    await expect(requireModule(id, "kitchen_queue", "write")).rejects.toThrow(
+      "Business module",
+    );
+    const check = await browser(owner, () =>
+      database.query(
+        "SELECT can_use_business_module($1,'website') AS core,can_use_business_module($1,'pos') AS pos,can_use_business_module($2,'pos') AS foreign,has_business_module($2,'pos') AS history",
+        [id, foreign],
+      ),
+    );
+    expect(check.rows[0]).toEqual({
+      core: true,
+      pos: true,
+      foreign: false,
+      history: true,
+    });
+    await expect(
+      browser(owner, () =>
+        database.query(
+          "UPDATE business_module_entitlements SET verified_at=now() WHERE merchant_id=$1",
+          [foreign],
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+  it("retains expired ticket reconciliation, completion, cancellation and acknowledgement while denying new orders", async () => {
+    const id = await expiredCompany();
+    const cat = await database.query<{ id: string }>(
+      "INSERT INTO menu_categories(merchant_id,name)VALUES($1,'Products') RETURNING id",
+      [id],
+    );
+    await database.query(
+      "INSERT INTO menu_products(id,merchant_id,category_id,name,description,price)VALUES($1,$2,$3,'Retained product','',1000)",
+      [crypto.randomUUID(), id, cat.rows[0].id],
+    );
+    const p = (
+      await database.query<{ id: string }>(
+        "SELECT id FROM menu_products WHERE merchant_id=$1",
+        [id],
+      )
+    ).rows[0].id;
+    await database.query(
+      "INSERT INTO business_module_entitlements(merchant_id,module_key,source,verified_at,expires_at)VALUES($1,'pos','admin',now()-interval '1 day',now()+interval '1 day')",
+      [id],
+    );
+    const input = {
+      requestId: crypto.randomUUID(),
+      items: [{ productId: p, quantity: 1, expectedPrice: 1000 }],
+      fulfillment: "takeaway" as const,
+      tableLabel: "",
+      note: "",
+      payment: "unpaid" as const,
+    };
+    const ticket = await createPosOrder(id, input);
+    const cancel = await createPosOrder(id, {
+      ...input,
+      requestId: crypto.randomUUID(),
+    });
+    await database.query(
+      "UPDATE business_module_entitlements SET expires_at=now()-interval '1 second' WHERE merchant_id=$1 AND module_key='pos'",
+      [id],
+    );
+    expect(await createPosOrder(id, input)).toEqual(ticket);
+    await expect(
+      createPosOrder(id, { ...input, requestId: crypto.randomUUID() }),
+    ).rejects.toThrow("Business module");
+    await expect(
+      createPosOrder(id, { ...input, note: "different" }),
+    ).rejects.toMatchObject({ code: "REQUEST_REUSED" });
+    expect(
+      (await operationsSnapshot(id)).orders.some(
+        (o) => o.id === ticket.orderId,
+      ),
+    ).toBe(true);
+    let version = 0;
+    for (const status of ["preparing", "ready", "completed"] as const) {
+      await changePosOrder(id, {
+        orderId: ticket.orderId,
+        version: version++,
+        status,
+        reason: "",
+      });
+    }
+    await changePosOrder(id, {
+      orderId: cancel.orderId,
+      version: 0,
+      status: "cancelled",
+      reason: "Customer cancelled",
+    });
+    await acknowledgePosCancellation(id, {
+      orderId: cancel.orderId,
+      version: 1,
+    });
+    expect(
+      (
+        await database.query(
+          "SELECT status FROM pos_orders WHERE merchant_id=$1 ORDER BY number",
+          [id],
+        )
+      ).rows,
+    ).toEqual([{ status: "completed" }, { status: "cancelled" }]);
+    expect(
+      (
+        await database.query(
+          "SELECT payment_verified_at FROM merchant_subscriptions WHERE merchant_id=$1",
+          [id],
+        )
+      ).rows[0],
+    ).toMatchObject({ payment_verified_at: null });
   });
 });

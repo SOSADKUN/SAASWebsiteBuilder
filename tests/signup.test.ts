@@ -1,3 +1,4 @@
+vi.mock("server-only", () => ({}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/subscription-service", () => ({ requireSubscription: vi.fn() }));
 const mocks = vi.hoisted(() => ({

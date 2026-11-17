@@ -77,6 +77,11 @@ export function SystemServicePicker({
   }
   return (
     <div className="system-service-picker">
+      <p>
+        Permanent Free Core includes your dashboard, business profile, product
+        catalog, media within quota and one multi-page website. Select optional
+        System Services below.
+      </p>
       <div className="services-filter">
         <p>Recommended for your business. Choose the services you need.</p>
         <button
@@ -180,7 +185,7 @@ export function SystemServicePicker({
                 <small>
                   {service.implemented
                     ? service.monthlyPrice === 0
-                      ? "Current trial/subscription editing rules apply"
+                      ? "Permanently included in Free Core"
                       : "14-day trial eligible · Demo price"
                     : "Not available to activate"}
                 </small>

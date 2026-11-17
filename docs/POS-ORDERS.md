@@ -1,8 +1,10 @@
 # POS / Cashier and Orders
 
+Current architecture and access policy: [Project Guide](SERVQOO_PROJECT_GUIDE.md).
+
 ## Two-device use
 
-Sign in on each device using the same SERVQO business account. Open `/dashboard/pos` on the cashier device and `/dashboard/orders` on the kitchen device. Each device needs its own initial sign-in. Supabase allows multiple sessions by default; leave any project-level single-session-per-user restriction disabled. The application does not restrict a user to one device. Sign-out now uses Supabase's local scope so it does not revoke the other device's session.
+Sign in on each device using the same SERVQOO business account. Open `/dashboard/pos` on the cashier device and `/dashboard/orders` on the kitchen device. Each device needs its own initial sign-in. Supabase allows multiple sessions by default; leave any project-level single-session-per-user restriction disabled. The application does not restrict a user to one device. Sign-out now uses Supabase's local scope so it does not revoke the other device's session.
 
 The Orders screen fetches authenticated snapshots approximately every three seconds while visible. POS automatically refreshes while its recent-tickets section is in view, and while confirming an uncertain submission; its initial load, explicit refresh, successful actions and reconnects can also fetch a snapshot. Actual update latency also includes the request time. They refresh after actions, on focus and when reconnecting. They pause while hidden, avoid overlapping requests and explicitly display sync failures. A closed, offline or sleeping kitchen screen cannot receive an immediate update; staff should also communicate urgent cancellations directly.
 
@@ -12,7 +14,7 @@ The catalog comes from Menu Management and uses its existing categories, availab
 
 A draft stays on this browser tab across reloads using session storage. Clearing an unsent draft does not affect the kitchen. No offline submission is claimed: the Send button requires a successful connection. Once submission starts, the request ID and bill are retained until success or a definite validation failure. If the response is lost, retrying uses the same request ID. The server returns the existing ticket rather than creating another; a matching ticket found during sync also lets the cashier start the next bill safely.
 
-The server validates permissions, subscription, current availability and prices; the client cannot choose an arbitrary total. Items retain name/price snapshots even if products are later edited or deleted. Per-business order numbers are allocated within the same transaction as the order, items and initial event. Failed transactions do not leave partial tickets.
+The server validates permissions, company service trial/verified entitlement, current availability and prices; the client cannot choose an arbitrary total. Items retain name/price snapshots even if products are later edited or deleted. Per-business order numbers are allocated within the same transaction as the order, items and initial event. Failed transactions do not leave partial tickets.
 
 Both screens have a Full Screen toggle beside connection status. It displays only
 that workspace, hiding the application navigation and header; Exit Full Screen is
@@ -29,7 +31,7 @@ Tickets move through Pending → Preparing → Ready → Completed. Each status 
 
 The cashier can cancel Pending tickets with a reason. Once the kitchen marks a ticket Preparing or Ready, cancellation is blocked in both the cashier UI and server transition policy. A stale cashier action is rejected under the ticket row lock. The kitchen sees a prominent Stop preparation notice. This notice remains in the live queue until someone acknowledges it, even if cancellation happened before the kitchen's first poll. Acknowledgement moves the cancelled ticket into history; it does not delete it. Activity records are append-only. Cancelling a ticket with recorded cash reminds the cashier to handle any refund separately.
 
-The recent history shows the latest 50 completed/acknowledged tickets. Active tickets and unacknowledged cancellations are not capped by that history limit. All records remain in PostgreSQL and are included in the existing business export. Reading orders, cancelling mistakes and acknowledging cancellations remain possible after subscription expiry; creating and advancing orders require an active trial/subscription.
+The recent history shows the latest 50 completed/acknowledged tickets. Active tickets and unacknowledged cancellations are not capped by that history limit. All records remain in PostgreSQL and are included in the existing business export. After service-trial expiry, enabled services retain tenant/role-protected history, cancellation acknowledgement and safe completion of existing tickets. Only new tickets need an active explicit service trial or verified company service entitlement. Exact committed-request retries can reconcile after expiry. Disabling services requires resolving active tickets and unacknowledged cancellations. See [the current Free Core policy](SUBSCRIPTIONS.md).
 
 ## Migration and deployment
 
@@ -49,7 +51,7 @@ Category Management was removed from the Maintenance menu. The old `/dashboard/m
 ## Investigating slow sends
 
 Order creation logs `pos.order.create` with one correlation reference and separate
-`authorization`, `subscription`, `database_transaction` and overall `request`
+`authorization`, `database_transaction` and overall `request`
 durations. These logs contain no bill contents, credentials or customer IDs.
 Authorization includes session verification and the current merchant membership;
 database transaction timing includes pool acquisition, SQL, lock waits and commit.
@@ -57,7 +59,7 @@ It does not include browser-to-server travel or proxy session refresh.
 
 Creation avoids three sequential SQL round trips: counter initialization and lock
 use one upsert, while item snapshots, the initial event and counter advancement
-use one parameterized statement. Permission, subscription, price, row-lock,
+use one parameterized statement. Permission, service access, price, row-lock,
 idempotency and rollback checks are retained. No schema migration is needed.
 
 Check Vercel Project Settings → Functions → Function Region against the production
@@ -76,4 +78,4 @@ attributing delays to Supabase compute or changing plans.
 
 ## Regression coverage
 
-Regression tests exercise real migrated PostgreSQL for atomic creation, idempotent retries, price/availability validation, subscription enforcement, snapshot preservation, stale updates, cancellation acknowledgements, tenant RLS, browser write denial and immutable events. Endpoint tests cover session expiry, permission failures and no-store responses. A two-context browser test uses the real service with an isolated PostgreSQL database and simulated authentication; it does not verify a production Supabase account's session settings.
+Regression tests exercise real migrated PostgreSQL for atomic creation, idempotent retries, price/availability validation, company service access enforcement, snapshot preservation, stale updates, cancellation acknowledgements, tenant RLS, browser write denial and immutable events. Endpoint tests cover session expiry, permission failures and no-store responses. A two-context browser test uses the real service with an isolated PostgreSQL database and simulated authentication; it does not verify a production Supabase account's session settings.

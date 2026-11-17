@@ -6,3 +6,14 @@ node_modules/
 coverage/
 .design-qa/
 *.tsbuildinfo
+
+# Local deployment metadata and generated diagnostics, never application source.
+.vercel/
+/npm-debug.log*
+/yarn-debug.log*
+/yarn-error.log*
+/pnpm-debug.log*
+/playwright-report/
+/test-results/
+.DS_Store
+Thumbs.db

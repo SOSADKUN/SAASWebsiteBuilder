@@ -16,6 +16,9 @@ vi.mock("@/lib/auth", () => ({
   authorize: mocks.authorize,
   supabase: async () => ({ storage: { from: mocks.from } }),
 }));
+vi.mock("@/lib/storage-admin", () => ({
+  storageAdmin: () => ({ storage: { from: mocks.from } }),
+}));
 vi.mock("@/lib/subscription-service", () => ({
   requireSubscription: mocks.subscription,
 }));
@@ -32,6 +35,9 @@ beforeAll(async () => {
   database = new PGlite();
   await database.exec(
     "CREATE ROLE anon;CREATE ROLE authenticated;CREATE SCHEMA auth;CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT NULL::uuid $$;",
+  );
+  await database.exec(
+    "CREATE SCHEMA storage;CREATE TABLE storage.objects(bucket_id text,name text);",
   );
   for (const file of (await readdir("drizzle"))
     .filter((f) => f.endsWith(".sql"))
@@ -153,14 +159,14 @@ it("cannot delete another business's asset by a known ID or mismatched stored pa
   );
   expect(mocks.remove).not.toHaveBeenCalled();
 });
-it("checks permission and subscription before touching storage", async () => {
+it("checks permission before storage, without a blanket subscription gate", async () => {
   const file = await asset();
   mocks.authorize.mockRejectedValueOnce(Error("Business access denied"));
   await expect(removeMediaAsset(merchant, file.id)).rejects.toThrow();
   expect(mocks.db).not.toHaveBeenCalled();
   mocks.subscription.mockRejectedValueOnce(Error("Subscription required:"));
-  await expect(removeMediaAsset(merchant, file.id)).rejects.toThrow();
-  expect(mocks.remove).not.toHaveBeenCalled();
+  await expect(removeMediaAsset(merchant, file.id)).resolves.toBeUndefined();
+  expect(mocks.remove).toHaveBeenCalledOnce();
 });
 it("counts only this business's orders completed in the Malaysian month, with member count", async () => {
   const start =
@@ -188,6 +194,7 @@ it("counts only this business's orders completed in the Malaysian month, with me
   }
   expect(await loadOverviewMetrics(merchant)).toEqual({
     revenue: 3734,
+    recordedCash: 0,
     completedOrders: 2,
     employees: 2,
   });
@@ -200,6 +207,7 @@ it("returns zero revenue for a new business, and never queries metrics before au
   );
   expect(await loadOverviewMetrics(empty)).toEqual({
     revenue: 0,
+    recordedCash: 0,
     completedOrders: 0,
     employees: 0,
   });
@@ -207,4 +215,27 @@ it("returns zero revenue for a new business, and never queries metrics before au
   mocks.authorize.mockRejectedValueOnce(Error("Business access denied"));
   await expect(loadOverviewMetrics(merchant)).rejects.toThrow();
   expect(mocks.db).not.toHaveBeenCalled();
+});
+
+it("separates manually recorded completed cash from unpaid gross totals", async () => {
+  const id = crypto.randomUUID();
+  await database.query(
+    "INSERT INTO merchants(id,name,slug)VALUES($1,'Cash report',$2)",
+    [id, id],
+  );
+  for (const [number, payment, status] of [
+    [1, "cash", "completed"],
+    [2, "unpaid", "completed"],
+    [3, "cash", "pending"],
+  ] as const) {
+    await database.query(
+      "INSERT INTO pos_orders(merchant_id,number,request_id,fingerprint,status,total,payment,cash_received,change_due,fulfillment,created_by)VALUES($1,$2,$3,'cash-report',$4,1000,$5,CASE WHEN $5='cash' THEN 1200 ELSE NULL END,CASE WHEN $5='cash' THEN 200 ELSE 0 END,'takeaway',$6)",
+      [id, number, crypto.randomUUID(), status, payment, actor],
+    );
+  }
+  expect(await loadOverviewMetrics(id)).toMatchObject({
+    revenue: 2000,
+    recordedCash: 1000,
+    completedOrders: 2,
+  });
 });

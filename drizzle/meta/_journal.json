@@ -50,6 +50,20 @@
       "when": 1794884775233,
       "tag": "0006_system_services_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794887227356,
+      "tag": "0007_company_storage_quota",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794895033185,
+      "tag": "0008_permanent_free_core",
+      "breakpoints": true
     }
   ]
 }

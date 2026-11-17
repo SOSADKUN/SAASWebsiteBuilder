@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AuthPage } from "@/components/auth/auth-page";
-export const metadata: Metadata = { title: "Sign in | SERVQO" };
+export const metadata: Metadata = { title: "Sign in | SERVQOO" };
 export default async function Page({
   searchParams,
 }: {

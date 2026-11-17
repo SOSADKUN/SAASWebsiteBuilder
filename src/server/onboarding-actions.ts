@@ -16,7 +16,7 @@ import {
   selectionError,
   serviceModules,
 } from "@/lib/system-services";
-import { requireSubscription } from "@/lib/subscription-service";
+
 import { merchantModuleState } from "./module-service";
 import { workspaceTrace } from "@/lib/workspace-diagnostics";
 import { workspaceErrorMessage } from "@/lib/workspace-errors";
@@ -137,9 +137,8 @@ export async function saveBusinessSetup(
           await merchantModuleState(merchantId, tx),
         );
         if (error) throw new SetupValidationError(error);
-        // No paid module can become writable after trial expiry without the
-        // existing verified base subscription. Core-only completion is safe.
-        if (selected.length) await requireSubscription(merchantId, tx);
+        // Effective module state validates explicit trials or verified service licenses.
+
         const enabled = serviceModules(selected);
         const optional = businessModules
           .filter((m) => m.optional)
